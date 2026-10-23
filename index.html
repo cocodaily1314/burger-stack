@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>漢堡疊疊樂 🍔</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    background: #FFF5EB;
+    color: #3D2914;
+  }
+  #wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #FFE8D6 0%, #FFF5EB 40%, #FFEFD9 100%);
+    box-shadow: 0 0 40px rgba(180,100,60,0.12);
+  }
+  #banner {
+    flex: 0 0 auto;
+    background: linear-gradient(135deg, #FF6B9D 0%, #FF8FB5 50%, #FF6B9D 100%);
+    color: #fff;
+    text-align: center;
+    padding: 12px 16px 14px;
+    box-shadow: 0 4px 16px rgba(255,107,157,0.35);
+    z-index: 5;
+  }
+  #banner h1 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.1);
+  }
+  #banner .hook {
+    font-size: 0.82rem;
+    opacity: 0.95;
+    margin-top: 4px;
+    font-weight: 500;
+  }
+  #hud {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(255,180,140,0.35);
+    z-index: 4;
+  }
+  #hud .pill {
+    background: #fff;
+    border-radius: 999px;
+    padding: 4px 12px;
+    box-shadow: 0 2px 6px rgba(180,100,60,0.1);
+  }
+  #hud .acc { color: #E85A8A; }
+  #hud .score { color: #C45C26; }
+  #canvasBox {
+    flex: 1 1 auto;
+    position: relative;
+    min-height: 0;
+  }
+  canvas#game {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: grab;
+  }
+  canvas#game:active { cursor: grabbing; }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(61,41,20,0.45);
+    z-index: 10;
+    padding: 16px;
+  }
+  #overlay.hidden { display: none; }
+  .card {
+    background: #FFF9F2;
+    border-radius: 20px;
+    padding: 22px 20px 18px;
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(61,41,20,0.25);
+    border: 2px solid #FFE0C2;
+  }
+  .card h2 {
+    font-size: 1.4rem;
+    margin-bottom: 6px;
+    color: #C45C26;
+  }
+  .card .sub {
+    font-size: 0.9rem;
+    color: #8B6B4A;
+    margin-bottom: 16px;
+    line-height: 1.45;
+  }
+  .btn {
+    display: inline-block;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 28px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.12s, box-shadow 0.12s;
+    margin: 4px;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-primary {
+    background: linear-gradient(135deg, #FF6B9D, #FF8A5B);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(255,107,157,0.4);
+  }
+  .btn-secondary {
+    background: #fff;
+    color: #C45C26;
+    border: 2px solid #FFD0A8;
+    box-shadow: 0 2px 8px rgba(180,100,60,0.1);
+  }
+  #resultScreen { display: none; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 360px; }
+  #resultScreen.show { display: flex; }
+  #resultCanvas {
+    width: 100%;
+    max-width: 320px;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(61,41,20,0.2);
+    background: #FFF9F2;
+  }
+  .result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .hint {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.9);
+    text-align: center;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+  #floatMsg {
+    position: absolute;
+    left: 50%;
+    top: 28%;
+    transform: translate(-50%, 0);
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #FF6B9D;
+    text-shadow: 0 2px 8px rgba(255,255,255,0.9);
+    pointer-events: none;
+    opacity: 0;
+    z-index: 6;
+    transition: opacity 0.2s, transform 0.4s;
+  }
+  #floatMsg.show {
+    opacity: 1;
+    transform: translate(-50%, -20px);
+  }
+  #controlsHint {
+    position: absolute;
+    bottom: 10px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: #A07858;
+    opacity: 0.85;
+    pointer-events: none;
+    z-index: 3;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="banner">
+    <h1>漢堡疊疊樂 🍔</h1>
+    <div class="hook">層層對齊，夢想就係完美漢堡！</div>
+  </div>
+  <div id="hud">
+    <span class="pill score">分數 <span id="scoreEl">0</span></span>
+    <span class="pill">層數 <span id="layerEl">0</span>/<span id="totalLayersEl">10</span></span>
+    <span class="pill acc">對齊 <span id="accEl">—</span></span>
+  </div>
+  <div id="canvasBox">
+    <canvas id="game"></canvas>
+    <div id="floatMsg"></div>
+    <div id="controlsHint">← 拖曳 / 方向鍵移動底盤 →</div>
+  </div>
+  <div id="overlay">
+    <div class="card" id="startCard">
+      <h2>準備好未？🍔</h2>
+      <p class="sub">用手指或滑鼠左右移動底盤，接住由上跌落嘅材料。對齊越準分越高；偏離太多就會散枱！</p>
+      <button class="btn btn-primary" id="startBtn">開始疊漢堡</button>
+    </div>
+    <div id="resultScreen">
+      <canvas id="resultCanvas" width="360" height="640"></canvas>
+      <div class="result-actions">
+        <button class="btn btn-primary" id="dlBtn">下載結果圖</button>
+        <button class="btn btn-secondary" id="retryBtn">再試一次</button>
+      </div>
+      <p class="hint">💡 可將結果圖分享去 Threads，挑戰朋友疊得齊唔齊！</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Config ──────────────────────────────────────────────
+  const TOTAL_LAYERS = 10;          // including top bun as last
+  const MISS_THRESHOLD = 0.18;     // overlap ratio below this = game over
+  const PERFECT_TOL = 0.04;        // |center diff| / width <= this = perfect
+  const BASE_FALL_SPEED = 2.2;
+  const SPEED_INC = 0.22;
+  const BASE_WIDTH = 160;
+  const PIECE_H = 28;
+  const BUN_H = 36;
+
+  // Ingredient sequence (last is always top bun)
+  const INGREDIENTS = [
+    { id: 'lettuce', name: '生菜', h: 18 },
+    { id: 'tomato',  name: '番茄', h: 22 },
+    { id: 'cheese',  name: '芝士', h: 16 },
+    { id: 'patty',   name: '肉餅', h: 30 },
+    { id: 'onion',   name: '洋蔥', h: 16 },
+    { id: 'pickle',  name: '酸瓜', h: 16 },
+    { id: 'bacon',   name: '煙肉', h: 18 },
+    { id: 'egg',     name: '煎蛋', h: 22 },
+    { id: 'lettuce2',name: '生菜', h: 18 },
+    { id: 'topBun',  name: '頂包', h: BUN_H },
+  ];
+
+  // Grades (HK funny titles)
+  function getGrade(score, avgAcc, perfects, layers, survived) {
+    if (!survived) {
+      if (layers <= 2) return { title: '散枱新手', emoji: '😅', color: '#A07858' };
+      if (layers <= 5) return { title: '半途而廢包', emoji: '🫠', color: '#C45C26' };
+      return { title: '差少少完美', emoji: '😤', color: '#E85A8A' };
+    }
+    if (avgAcc >= 95 && perfects >= 5) return { title: '米芝蓮主廚', emoji: '👨‍🍳', color: '#D4A017' };
+    if (avgAcc >= 90) return { title: '漢堡藝術家', emoji: '🎨', color: '#FF6B9D' };
+    if (avgAcc >= 80) return { title: '穩陣大廚', emoji: '😎', color: '#C45C26' };
+    if (avgAcc >= 70) return { title: '街坊食店級', emoji: '🏪', color: '#8B6B4A' };
+    if (avgAcc >= 55) return { title: '深夜食堂學徒', emoji: '🌙', color: '#A07858' };
+    return { title: '斜斜都得食', emoji: '🤪', color: '#A07858' };
+  }
+
+  // ── DOM ─────────────────────────────────────────────────
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const startCard = document.getElementById('startCard');
+  const resultScreen = document.getElementById('resultScreen');
+  const resultCanvas = document.getElementById('resultCanvas');
+  const scoreEl = document.getElementById('scoreEl');
+  const layerEl = document.getElementById('layerEl');
+  const totalLayersEl = document.getElementById('totalLayersEl');
+  const accEl = document.getElementById('accEl');
+  const floatMsg = document.getElementById('floatMsg');
+  const controlsHint = document.getElementById('controlsHint');
+
+  totalLayersEl.textContent = TOTAL_LAYERS;
+
+  // ── State ───────────────────────────────────────────────
+  let W, H, dpr;
+  let state = 'start'; // start | playing | falling | landing | over | result
+  let stack = [];      // {x, y, w, h, id, name}
+  let falling = null;
+  let score = 0;
+  let lastAcc = null;
+  let perfects = 0;
+  let accSum = 0;
+  let placed = 0;
+  let nextIdx = 0;
+  let keys = {};
+  let dragX = null;
+  let floatTimer = null;
+  let animId = null;
+  let fallSpeed = BASE_FALL_SPEED;
+  let tableY = 0;
+  let shake = 0;
+  let particles = [];
+
+  // ── Resize ──────────────────────────────────────────────
+  function resize() {
+    const box = document.getElementById('canvasBox');
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = box.clientWidth;
+    H = box.clientHeight;
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    tableY = H - 48;
+    // Keep stack grounded
+    if (stack.length) {
+      let y = tableY;
+      for (let i = 0; i < stack.length; i++) {
+        stack[i].y = y - stack[i].h;
+        y = stack[i].y;
+      }
+    }
+  }
+  window.addEventListener('resize', resize);
+
+  // ── Input ───────────────────────────────────────────────
+  function moveBase(nx) {
+    if (!stack.length || state === 'over' || state === 'result' || state === 'start') return;
+    const base = stack[0];
+    const half = base.w / 2;
+    nx = Math.max(half + 8, Math.min(W - half - 8, nx));
+    const dx = nx - (base.x + half);
+    for (const p of stack) p.x += dx;
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (state !== 'playing' && state !== 'falling') return;
+    canvas.setPointerCapture(e.pointerId);
+    dragX = e.clientX;
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (dragX == null) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    moveBase(cx);
+  });
+  canvas.addEventListener('pointerup', () => { dragX = null; });
+  canvas.addEventListener('pointercancel', () => { dragX = null; });
+
+  window.addEventListener('keydown', (e) => {
+    keys[e.key] = true;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ') e.preventDefault();
+  });
+  window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+  // ── Game flow ───────────────────────────────────────────
+  function resetGame() {
+    score = 0; lastAcc = null; perfects = 0; accSum = 0; placed = 0;
+    nextIdx = 0; fallSpeed = BASE_FALL_SPEED; particles = []; shake = 0;
+    updateHUD();
+    const bw = BASE_WIDTH;
+    stack = [{
+      x: (W - bw) / 2,
+      y: tableY - BUN_H,
+      w: bw,
+      h: BUN_H,
+      id: 'bottomBun',
+      name: '底包',
+    }];
+    falling = null;
+    state = 'playing';
+    controlsHint.style.opacity = '0.85';
+    spawnNext();
+  }
+
+  function spawnNext() {
+    if (nextIdx >= TOTAL_LAYERS) {
+      endGame(true);
+      return;
+    }
+    const ing = INGREDIENTS[nextIdx];
+    const top = stack[stack.length - 1];
+    const w = top.w;
+    const h = ing.h;
+    falling = {
+      x: Math.random() * (W - w - 40) + 20,
+      y: -h - 10,
+      w, h,
+      id: ing.id,
+      name: ing.name,
+      vy: fallSpeed,
+    };
+    state = 'falling';
+    nextIdx++;
+    layerEl.textContent = Math.min(nextIdx, TOTAL_LAYERS);
+  }
+
+  function showFloat(text, color) {
+    floatMsg.textContent = text;
+    floatMsg.style.color = color || '#FF6B9D';
+    floatMsg.classList.add('show');
+    clearTimeout(floatTimer);
+    floatTimer = setTimeout(() => floatMsg.classList.remove('show'), 700);
+  }
+
+  function landPiece() {
+    const top = stack[stack.length - 1];
+    const f = falling;
+
+    // Horizontal overlap
+    const left = Math.max(f.x, top.x);
+    const right = Math.min(f.x + f.w, top.x + top.w);
+    const overlap = Math.max(0, right - left);
+    const ratio = overlap / f.w; // how much of falling piece sits on top
+    const accPct = Math.round(ratio * 100);
+
+    // Center alignment for perfect / score bonus
+    const fCx = f.x + f.w / 2;
+    const tCx = top.x + top.w / 2;
+    const centerOff = Math.abs(fCx - tCx);
+    const centerRatio = centerOff / top.w;
+
+    if (ratio < MISS_THRESHOLD) {
+      // GAME OVER — piece falls off
+      lastAcc = accPct;
+      accEl.textContent = accPct + '%';
+      showFloat('散枱！💥', '#E85A8A');
+      spawnMissParticles(f);
+      shake = 12;
+      falling = null;
+      state = 'over';
+      setTimeout(() => endGame(false), 900);
+      return;
+    }
+
+    // New piece sits on overlap region, width = overlap (stacker style)
+    const newW = Math.max(24, overlap);
+    const newX = left;
+    const newY = top.y - f.h;
+
+    // Score: base from overlap %, bonus for near-perfect center
+    let pts = Math.round(ratio * 100);
+    let label = '好！';
+    let color = '#C45C26';
+    if (centerRatio <= PERFECT_TOL && ratio >= 0.95) {
+      pts = Math.round(pts * 1.5) + 20;
+      perfects++;
+      label = '完美！✨';
+      color = '#FF6B9D';
+      spawnPerfectParticles(fCx, newY);
+    } else if (ratio >= 0.85) {
+      pts = Math.round(pts * 1.15);
+      label = '差唔多！';
+      color = '#FF8A5B';
+    } else if (ratio < 0.5) {
+      label = '驚險…';
+      color = '#A07858';
+    }
+
+    // Speed bonus for later layers
+    pts += Math.floor(nextIdx * 2);
+
+    score += pts;
+    lastAcc = accPct;
+    accSum += accPct;
+    placed++;
+    updateHUD();
+    showFloat(label + ' +' + pts, color);
+
+    stack.push({
+      x: newX,
+      y: newY,
+      w: newW,
+      h: f.h,
+      id: f.id,
+      name: f.name,
+    });
+
+    falling = null;
+    fallSpeed = BASE_FALL_SPEED + SPEED_INC * nextIdx;
+    state = 'playing';
+
+    // Camera: if stack too tall, shift everything down a bit (keep top visible)
+    const topY = stack[stack.length - 1].y;
+    if (topY < 80) {
+      const shift = 80 - topY;
+      for (const p of stack) p.y += shift;
+    }
+
+    setTimeout(spawnNext, 380);
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = score;
+    accEl.textContent = lastAcc == null ? '—' : lastAcc + '%';
+  }
+
+  function endGame(survived) {
+    state = 'result';
+    controlsHint.style.opacity = '0';
+    const avgAcc = placed > 0 ? Math.round(accSum / placed) : 0;
+    const grade = getGrade(score, avgAcc, perfects, placed, survived);
+    drawResultCard(survived, avgAcc, grade);
+    startCard.style.display = 'none';
+    resultScreen.classList.add('show');
+    overlay.classList.remove('hidden');
+  }
+
+  // ── Particles ───────────────────────────────────────────
+  function spawnPerfectParticles(x, y) {
+    for (let i = 0; i < 14; i++) {
+      particles.push({
+        x, y: y + 10,
+        vx: (Math.random() - 0.5) * 6,
+        vy: -Math.random() * 5 - 2,
+        life: 40 + Math.random() * 20,
+        color: ['#FF6B9D', '#FFD700', '#FF8A5B', '#fff'][i % 4],
+        r: 3 + Math.random() * 3,
+      });
+    }
+  }
+  function spawnMissParticles(f) {
+    for (let i = 0; i < 10; i++) {
+      particles.push({
+        x: f.x + f.w / 2,
+        y: f.y + f.h / 2,
+        vx: (Math.random() - 0.5) * 8,
+        vy: Math.random() * 4 + 1,
+        life: 35,
+        color: '#8B6B4A',
+        r: 2 + Math.random() * 3,
+      });
+    }
+  }
+
+  // ── Drawing helpers ─────────────────────────────────────
+  function roundRect(x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function drawIngredient(p, alpha) {
+    ctx.save();
+    if (alpha != null) ctx.globalAlpha = alpha;
+    const { x, y, w, h, id } = p;
+    const cx = x + w / 2;
+
+    if (id === 'bottomBun' || id === 'topBun') {
+      // Soft golden bun, ¾/side view feel
+      const isTop = id === 'topBun';
+      ctx.fillStyle = '#E8A04A';
+      if (isTop) {
+        // Domed top
+        ctx.beginPath();
+        ctx.ellipse(cx, y + h * 0.55, w / 2, h * 0.55, 0, Math.PI, 0);
+        ctx.lineTo(x + w, y + h);
+        ctx.lineTo(x, y + h);
+        ctx.closePath();
+        ctx.fill();
+        // Highlight
+        ctx.fillStyle = 'rgba(255,230,180,0.45)';
+        ctx.beginPath();
+        ctx.ellipse(cx - w * 0.12, y + h * 0.35, w * 0.28, h * 0.22, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+        // Sesame
+        ctx.fillStyle = '#F5E6C8';
+        for (let i = 0; i < 7; i++) {
+          const sx = x + w * (0.18 + (i % 4) * 0.2) + (i > 3 ? w * 0.08 : 0);
+          const sy = y + h * (0.25 + Math.floor(i / 4) * 0.22);
+          ctx.beginPath();
+          ctx.ellipse(sx, sy, 3, 2, 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Bottom rim
+        ctx.fillStyle = '#D4893A';
+        roundRect(x, y + h - 6, w, 6, 2);
+        ctx.fill();
+      } else {
+        // Flat bottom bun with slight curve
+        roundRect(x, y, w, h, 10);
+        ctx.fill();
+        ctx.fillStyle = '#F0B86A';
+        roundRect(x + 2, y + 2, w - 4, h * 0.4, 8);
+        ctx.fill();
+        ctx.fillStyle = '#C87830';
+        roundRect(x, y + h - 8, w, 8, 4);
+        ctx.fill();
+      }
+    } else if (id === 'lettuce' || id === 'lettuce2') {
+      ctx.fillStyle = '#7CB342';
+      ctx.beginPath();
+      const waves = 5;
+      ctx.moveTo(x, y + h * 0.5);
+      for (let i = 0; i <= waves; i++) {
+        const px = x + (w / waves) * i;
+        const py = y + (i % 2 === 0 ? 2 : h - 2);
+        ctx.lineTo(px, py);
+      }
+      ctx.lineTo(x + w, y + h * 0.5);
+      for (let i = waves; i >= 0; i--) {
+        const px = x + (w / waves) * i;
+        const py = y + h * 0.5 + (i % 2 === 0 ? 4 : -2);
+        ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#9CCC65';
+      ctx.beginPath();
+      ctx.moveTo(x + 4, y + h * 0.45);
+      for (let i = 0; i <= 4; i++) {
+        ctx.lineTo(x + 4 + ((w - 8) / 4) * i, y + (i % 2 ? 4 : h - 6));
+      }
+      ctx.lineTo(x + w - 4, y + h * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    } else if (id === 'tomato') {
+      ctx.fillStyle = '#E53935';
+      roundRect(x, y, w, h, h / 2);
+      ctx.fill();
+      ctx.fillStyle = '#EF5350';
+      roundRect(x + 3, y + 2, w - 6, h * 0.4, h / 3);
+      ctx.fill();
+      // Seeds hint
+      ctx.fillStyle = 'rgba(255,200,150,0.5)';
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.ellipse(x + w * (0.2 + i * 0.2), y + h * 0.55, 3, 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (id === 'cheese') {
+      ctx.fillStyle = '#FFC107';
+      ctx.beginPath();
+      ctx.moveTo(x - 4, y);
+      ctx.lineTo(x + w + 4, y);
+      ctx.lineTo(x + w - 2, y + h);
+      ctx.lineTo(x + 2, y + h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#FFD54F';
+      ctx.beginPath();
+      ctx.moveTo(x, y + 2);
+      ctx.lineTo(x + w, y + 2);
+      ctx.lineTo(x + w - 4, y + h * 0.5);
+      ctx.lineTo(x + 4, y + h * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    } else if (id === 'patty') {
+      ctx.fillStyle = '#5D4037';
+      roundRect(x, y, w, h, 8);
+      ctx.fill();
+      ctx.fillStyle = '#6D4C41';
+      roundRect(x + 3, y + 3, w - 6, h * 0.35, 6);
+      ctx.fill();
+      // Grill marks
+      ctx.strokeStyle = 'rgba(40,25,20,0.35)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + 10, y + 8 + i * 7);
+        ctx.lineTo(x + w - 10, y + 10 + i * 7);
+        ctx.stroke();
+      }
+    } else if (id === 'onion') {
+      ctx.fillStyle = '#F8BBD0';
+      roundRect(x, y, w, h, h / 2);
+      ctx.fill();
+      ctx.strokeStyle = '#F48FB1';
+      ctx.lineWidth = 1.5;
+      for (let i = 1; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + 6, y + (h / 3) * i);
+        ctx.lineTo(x + w - 6, y + (h / 3) * i);
+        ctx.stroke();
+      }
+    } else if (id === 'pickle') {
+      ctx.fillStyle = '#689F38';
+      roundRect(x, y, w, h, 4);
+      ctx.fill();
+      ctx.fillStyle = '#8BC34A';
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.arc(x + w * (0.15 + i * 0.18), y + h * 0.5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (id === 'bacon') {
+      // Wavy strips
+      ctx.fillStyle = '#C62828';
+      roundRect(x, y, w, h, 3);
+      ctx.fill();
+      ctx.fillStyle = '#FFCC80';
+      for (let i = 0; i < 3; i++) {
+        roundRect(x, y + 3 + i * 5, w, 3, 1);
+        ctx.fill();
+      }
+    } else if (id === 'egg') {
+      ctx.fillStyle = '#FFF8E1';
+      roundRect(x, y, w, h, h / 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFC107';
+      ctx.beginPath();
+      ctx.ellipse(cx, y + h / 2, Math.min(w * 0.22, 16), h * 0.32, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#A1887F';
+      roundRect(x, y, w, h, 6);
+      ctx.fill();
+    }
+
+    // Soft shadow under piece
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(cx, y + h + 2, w * 0.42, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawTable() {
+    // Cream table / plate area
+    ctx.fillStyle = '#FFE8D0';
+    ctx.fillRect(0, tableY, W, H - tableY);
+    ctx.fillStyle = '#FFD9B8';
+    ctx.fillRect(0, tableY, W, 4);
+    // Soft plate
+    ctx.fillStyle = '#FFF8F0';
+    ctx.beginPath();
+    ctx.ellipse(W / 2, tableY + 18, Math.min(W * 0.42, 180), 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#F0D8C0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function drawBg() {
+    // Soft cream with subtle dots
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#FFE8D6');
+    g.addColorStop(0.5, '#FFF5EB');
+    g.addColorStop(1, '#FFEFD9');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,200,160,0.25)';
+    for (let i = 0; i < 12; i++) {
+      const px = (i * 97 + 40) % W;
+      const py = (i * 73 + 30) % (H * 0.7);
+      ctx.beginPath();
+      ctx.arc(px, py, 3 + (i % 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ── Result card ─────────────────────────────────────────
+  function drawResultCard(survived, avgAcc, grade) {
+    const rc = resultCanvas;
+    const rctx = rc.getContext('2d');
+    const RW = 360, RH = 640;
+    rc.width = RW; rc.height = RH;
+
+    // Background
+    const bg = rctx.createLinearGradient(0, 0, 0, RH);
+    bg.addColorStop(0, '#FF6B9D');
+    bg.addColorStop(0.22, '#FF8FB5');
+    bg.addColorStop(0.22, '#FFF5EB');
+    bg.addColorStop(1, '#FFE8D6');
+    rctx.fillStyle = bg;
+    rctx.fillRect(0, 0, RW, RH);
+
+    // Banner text
+    rctx.fillStyle = '#fff';
+    rctx.font = 'bold 26px "PingFang TC", "Noto Sans TC", sans-serif';
+    rctx.textAlign = 'center';
+    rctx.fillText('漢堡疊疊樂 🍔', RW / 2, 48);
+    rctx.font = '14px "PingFang TC", "Noto Sans TC", sans-serif';
+    rctx.fillText('層層對齊，夢想就係完美漢堡！', RW / 2, 74);
+
+    // White card body
+    rctx.fillStyle = '#FFF9F2';
+    roundRectPath(rctx, 24, 100, RW - 48, 480, 20);
+    rctx.fill();
+    rctx.strokeStyle = '#FFE0C2';
+    rctx.lineWidth = 2;
+    rctx.stroke();
+
+    // Grade
+    rctx.fillStyle = grade.color;
+    rctx.font = 'bold 22px "PingFang TC", "Noto Sans TC", sans-serif';
+    rctx.fillText(grade.emoji + ' ' + grade.title, RW / 2, 150);
+
+    // Big score
+    rctx.fillStyle = '#C45C26';
+    rctx.font = 'bold 64px "PingFang TC", system-ui, sans-serif';
+    rctx.fillText(String(score), RW / 2, 230);
+    rctx.font = '16px "PingFang TC", sans-serif';
+    rctx.fillStyle = '#8B6B4A';
+    rctx.fillText('總分', RW / 2, 258);
+
+    // Mini burger preview
+    drawMiniStack(rctx, RW / 2, 320);
+
+    // Breakdown
+    const lines = [
+      { label: '層數', value: placed + ' / ' + TOTAL_LAYERS },
+      { label: '平均對齊%', value: avgAcc + '%' },
+      { label: '完美次數', value: String(perfects) },
+      { label: '結果', value: survived ? '完成漢堡 ✅' : '散枱出局 💥' },
+    ];
+    rctx.font = '15px "PingFang TC", sans-serif';
+    rctx.textAlign = 'left';
+    let ly = 400;
+    lines.forEach((ln) => {
+      rctx.fillStyle = '#A07858';
+      rctx.fillText(ln.label, 56, ly);
+      rctx.fillStyle = '#3D2914';
+      rctx.textAlign = 'right';
+      rctx.font = 'bold 15px "PingFang TC", sans-serif';
+      rctx.fillText(ln.value, RW - 56, ly);
+      rctx.textAlign = 'left';
+      rctx.font = '15px "PingFang TC", sans-serif';
+      ly += 32;
+    });
+
+    // Footer
+    rctx.textAlign = 'center';
+    rctx.fillStyle = '#A07858';
+    rctx.font = '12px "PingFang TC", sans-serif';
+    rctx.fillText('分享去 Threads，睇邊個疊得齊！', RW / 2, 610);
+  }
+
+  function roundRectPath(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function drawMiniStack(rctx, cx, cy) {
+    // Draw a simplified version of current stack centered
+    if (!stack.length) return;
+    const scale = 0.55;
+    const totalH = stack.reduce((s, p) => s + p.h, 0) * scale;
+    let y = cy + totalH / 2;
+    // Use average center of stack
+    const avgCx = stack.reduce((s, p) => s + p.x + p.w / 2, 0) / stack.length;
+    for (let i = 0; i < stack.length; i++) {
+      const p = stack[i];
+      const mw = p.w * scale;
+      const mh = p.h * scale;
+      const mx = cx - mw / 2 + (p.x + p.w / 2 - avgCx) * scale * 0.3;
+      y -= mh;
+      // Temporarily draw using main ctx style via simple shapes on rctx
+      drawIngredientOn(rctx, { x: mx, y, w: mw, h: mh, id: p.id }, 1);
+    }
+  }
+
+  function drawIngredientOn(c, p, alpha) {
+    // Lightweight port for result card (same shapes)
+    const prev = { ctx };
+    // Reuse by temporarily swapping — instead inline simplified
+    c.save();
+    if (alpha != null) c.globalAlpha = alpha;
+    const { x, y, w, h, id } = p;
+    const cx = x + w / 2;
+    const rr = (xx, yy, ww, hh, r) => {
+      const rad = Math.min(r, ww / 2, hh / 2);
+      c.beginPath();
+      c.moveTo(xx + rad, yy);
+      c.arcTo(xx + ww, yy, xx + ww, yy + hh, rad);
+      c.arcTo(xx + ww, yy + hh, xx, yy + hh, rad);
+      c.arcTo(xx, yy + hh, xx, yy, rad);
+      c.arcTo(xx, yy, xx + ww, yy, rad);
+      c.closePath();
+    };
+    if (id === 'bottomBun' || id === 'topBun') {
+      c.fillStyle = '#E8A04A';
+      if (id === 'topBun') {
+        c.beginPath();
+        c.ellipse(cx, y + h * 0.55, w / 2, h * 0.55, 0, Math.PI, 0);
+        c.lineTo(x + w, y + h); c.lineTo(x, y + h); c.closePath();
+        c.fill();
+        c.fillStyle = '#D4893A';
+        rr(x, y + h - 5, w, 5, 2); c.fill();
+      } else {
+        rr(x, y, w, h, 8); c.fill();
+        c.fillStyle = '#C87830';
+        rr(x, y + h - 6, w, 6, 3); c.fill();
+      }
+    } else if (id === 'lettuce' || id === 'lettuce2') {
+      c.fillStyle = '#7CB342';
+      rr(x, y, w, h, 4); c.fill();
+    } else if (id === 'tomato') {
+      c.fillStyle = '#E53935'; rr(x, y, w, h, h / 2); c.fill();
+    } else if (id === 'cheese') {
+      c.fillStyle = '#FFC107';
+      c.beginPath();
+      c.moveTo(x - 3, y); c.lineTo(x + w + 3, y);
+      c.lineTo(x + w - 2, y + h); c.lineTo(x + 2, y + h); c.closePath(); c.fill();
+    } else if (id === 'patty') {
+      c.fillStyle = '#5D4037'; rr(x, y, w, h, 6); c.fill();
+    } else if (id === 'onion') {
+      c.fillStyle = '#F8BBD0'; rr(x, y, w, h, h / 2); c.fill();
+    } else if (id === 'pickle') {
+      c.fillStyle = '#689F38'; rr(x, y, w, h, 3); c.fill();
+    } else if (id === 'bacon') {
+      c.fillStyle = '#C62828'; rr(x, y, w, h, 2); c.fill();
+    } else if (id === 'egg') {
+      c.fillStyle = '#FFF8E1'; rr(x, y, w, h, h / 2); c.fill();
+      c.fillStyle = '#FFC107';
+      c.beginPath(); c.ellipse(cx, y + h / 2, Math.min(w * 0.22, 12), h * 0.3, 0, 0, Math.PI * 2); c.fill();
+    } else {
+      c.fillStyle = '#A1887F'; rr(x, y, w, h, 4); c.fill();
+    }
+    c.restore();
+  }
+
+  // ── Main loop ───────────────────────────────────────────
+  function tick() {
+    // Keyboard move
+    if (state === 'playing' || state === 'falling') {
+      let dx = 0;
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 6;
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 6;
+      if (dx) {
+        const base = stack[0];
+        moveBase(base.x + base.w / 2 + dx);
+      }
+    }
+
+    if (state === 'falling' && falling) {
+      falling.y += falling.vy;
+      const top = stack[stack.length - 1];
+      if (falling.y + falling.h >= top.y) {
+        falling.y = top.y - falling.h;
+        landPiece();
+      }
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    if (shake > 0) shake *= 0.85;
+    if (shake < 0.3) shake = 0;
+
+    draw();
+    animId = requestAnimationFrame(tick);
+  }
+
+  function draw() {
+    ctx.save();
+    if (shake) {
+      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    }
+    drawBg();
+    drawTable();
+
+    // Stack from bottom
+    for (const p of stack) drawIngredient(p);
+
+    if (falling) {
+      drawIngredient(falling, 0.95);
+      // Ghost guide of current top width
+      const top = stack[stack.length - 1];
+      ctx.strokeStyle = 'rgba(255,107,157,0.35)';
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(top.x, falling.y, top.w, falling.h);
+      ctx.setLineDash([]);
+    }
+
+    for (const p of particles) {
+      ctx.globalAlpha = Math.min(1, p.life / 20);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  // ── Buttons ─────────────────────────────────────────────
+  document.getElementById('startBtn').addEventListener('click', () => {
+    overlay.classList.add('hidden');
+    resultScreen.classList.remove('show');
+    startCard.style.display = 'block';
+    resize();
+    resetGame();
+  });
+
+  document.getElementById('retryBtn').addEventListener('click', () => {
+    overlay.classList.add('hidden');
+    resultScreen.classList.remove('show');
+    startCard.style.display = 'block';
+    resize();
+    resetGame();
+  });
+
+  document.getElementById('dlBtn').addEventListener('click', () => {
+    const url = resultCanvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'burger-stack-result.png';
+    a.click();
+  });
+
+  // Boot
+  resize();
+  draw();
+  animId = requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

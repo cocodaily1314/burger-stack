@@ -259,7 +259,7 @@
   }
   #controlsHint {
     position: absolute;
-    bottom: calc(56px + env(safe-area-inset-bottom, 0));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0));
     left: 0; right: 0;
     text-align: center;
     font-size: 0.75rem;
@@ -269,6 +269,7 @@
     pointer-events: none;
     z-index: 3;
   }
+  #timeBarWrap { display: none !important; }
   #countdown {
     position: absolute;
     inset: 0;
@@ -291,48 +292,6 @@
     0% { transform: scale(0.55); opacity: 0.3; }
     60% { transform: scale(1.08); opacity: 1; }
     100% { transform: scale(1); opacity: 1; }
-  }
-  #touchPad {
-    position: absolute;
-    left: 0; right: 0;
-    bottom: 0;
-    height: calc(72px + env(safe-area-inset-bottom, 0));
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    display: none;
-    grid-template-columns: 1fr 1.15fr 1fr;
-    gap: 8px;
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top: 6px;
-    z-index: 8;
-    background: linear-gradient(180deg, transparent 0%, rgba(255,245,235,0.82) 35%, rgba(255,245,235,0.95) 100%);
-    pointer-events: none;
-  }
-  #touchPad.show { display: grid; }
-  #touchPad button {
-    pointer-events: auto;
-    border: none;
-    border-radius: 16px;
-    font-family: inherit;
-    font-size: 1.35rem;
-    font-weight: 800;
-    color: #C45C26;
-    background: rgba(255,255,255,0.92);
-    box-shadow: 0 2px 10px rgba(180,100,60,0.18);
-    min-height: 52px;
-    touch-action: manipulation;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-  #touchPad button:active,
-  #touchPad button.held {
-    background: linear-gradient(135deg, #FF6B9D, #FF8A5B);
-    color: #fff;
-    transform: scale(0.97);
-  }
-  #touchPad .dropBtn {
-    font-size: 0.95rem;
-    letter-spacing: 0.02em;
   }
   #overlay {
     padding: 8px;
@@ -363,9 +322,6 @@
     #banner h1 { font-size: 0.95rem; }
     #banner .hook { display: none; }
     #hud { padding: 3px 6px 2px; font-size: 0.72rem; }
-    #timeBarWrap { padding: 0 8px 3px; }
-    #timeBarTrack { height: 8px; }
-    #timeLabel { font-size: 0.68rem; }
   }
 </style>
 </head>
@@ -373,33 +329,22 @@
 <div id="wrap">
   <div id="banner">
     <h1>漢堡疊疊樂 🍔</h1>
-    <div class="hook">限時疊漢堡 · 靠眼力對齊</div>
+    <div class="hook">不停疊高 · 物理平衡 · 拖曳移動</div>
   </div>
   <div id="hud">
     <span class="pill score">總分 <span id="scoreEl">0</span></span>
-    <span class="pill meta">層 <span id="layerEl">0</span>/<span id="totalLayersEl">10</span></span>
-    <span class="pill acc">對齊 <span id="accEl">—</span></span>
-  </div>
-  <div id="timeBarWrap">
-    <div id="timeBarTrack">
-      <div id="timeBarFill"></div>
-      <div id="timeLabel"><span id="timeEl">24.0</span> 秒</div>
-    </div>
+    <span class="pill meta">層 <span id="layerEl">0</span></span>
+    <span class="pill acc">平衡 <span id="accEl">—</span></span>
   </div>
   <div id="canvasBox">
     <canvas id="game"></canvas>
     <div id="floatMsg"></div>
     <div id="countdown" aria-live="polite"><span class="cd-num"></span></div>
-    <div id="controlsHint">拖曳移動 · 撳左右細調</div>
-    <div id="touchPad">
-      <button type="button" id="btnLeft" aria-label="向左">◀</button>
-      <button type="button" id="btnDrop" class="dropBtn" aria-label="移去中間">移中</button>
-      <button type="button" id="btnRight" aria-label="向右">▶</button>
-    </div>
+    <div id="controlsHint">拖曳畫布左右移動 · 對齊唔好會倒塌</div>
     <div id="overlay">
       <div class="card" id="startCard">
         <h2>準備好未？🍔</h2>
-        <p class="sub">左右移動底盤，接住跌落嘅材料。冇對齊輔助線，限時內疊到頂包。主廚頭銜極罕有。</p>
+        <p class="sub">拖曳畫布左右移動，接住跌落嘅材料。冇限時、唔停疊高；重心偏離會物理倒塌。主廚頭銜極罕有。</p>
         <button class="btn btn-primary" id="startBtn">開始疊漢堡</button>
       </div>
       <div id="resultScreen">
@@ -424,16 +369,18 @@
     return;
   }
 
-  // ── Config (harder) ─────────────────────────────────────
-  const TOTAL_LAYERS = 10;
-  const MISS_THRESHOLD = 0.34;
-  const PERFECT_TOL = 0.015;
-  const BASE_FALL_SPEED = 4.6;
-  const SPEED_INC = 0.52;
+  // ── Config (endless physics) ────────────────────────────
+  const MISS_THRESHOLD = 0.32;
+  const PERFECT_TOL = 0.018;
+  const BASE_FALL_SPEED = 3.8;
+  const SPEED_INC = 0.18;
+  const MAX_FALL_SPEED = 9.5;
+  const GRAVITY = 14;
   const BASE_WIDTH = 150;
   const BUN_H = 36;
-  const ROUND_TIME = 24;
   const DEPTH = 72;
+  const TIP_SUPPORT = 0.22; // COM must stay within middle (1-2*TIP) of base
+  const TIP_ANGLE_MAX = 0.55;
 
   const CORE_TOPPINGS = [
     { id: 'lettuce', name: '生菜', h: 18 },
@@ -481,66 +428,40 @@
     return arr;
   }
 
-  function buildIngredientQueue(rnd) {
-    const midSlots = TOTAL_LAYERS - 1;
-    const core = CORE_TOPPINGS.map((x) => Object.assign({}, x));
-    shuffleInPlace(core, rnd);
-    const wild = WILD_TOPPINGS.map((x) => Object.assign({}, x));
-    shuffleInPlace(wild, rnd);
-
-    let wildN = 1;
-    const wr = rnd();
-    if (wr < 0.12) wildN = 0;
-    else if (wr < 0.55) wildN = 1;
-    else if (wr < 0.88) wildN = 2;
-    else wildN = 3;
-    wildN = Math.min(wildN, wild.length, midSlots - 3);
-
-    const chosen = [];
-    for (let i = 0; i < wildN; i++) chosen.push(wild[i]);
-    let ci = 0;
-    while (chosen.length < midSlots) {
-      chosen.push(core[ci % core.length]);
-      ci++;
+  function pickNextIngredient(rnd, layerIdx, lastId) {
+    // Endless: cycle toppings forever; rare topBun as just another layer (not a win)
+    const pool = CORE_TOPPINGS.concat(WILD_TOPPINGS);
+    if (layerIdx > 0 && layerIdx % 12 === 11 && rnd() < 0.55) {
+      return Object.assign({}, TOP_BUN);
     }
-    shuffleInPlace(chosen, rnd);
-    for (let i = 1; i < chosen.length; i++) {
-      if (chosen[i].id === chosen[i - 1].id) {
-        for (let j = i + 1; j < chosen.length; j++) {
-          if (chosen[j].id !== chosen[i - 1].id) {
-            const t = chosen[i]; chosen[i] = chosen[j]; chosen[j] = t;
-            break;
-          }
-        }
-      }
+    let pick = pool[Math.floor(rnd() * pool.length)];
+    let guard = 0;
+    while (lastId && pick.id === lastId && guard++ < 8) {
+      pick = pool[Math.floor(rnd() * pool.length)];
     }
-    chosen.push(Object.assign({}, TOP_BUN));
-    return chosen;
+    return Object.assign({}, pick);
   }
 
   function getGrade(score, avgAcc, perfects, layers, survived, reason) {
-    if (reason === 'timeout') {
-      if (layers <= 3) return { title: '時間到', emoji: '⏰', color: '#E85A8A' };
-      if (layers <= 6) return { title: '差少少', emoji: '🏃', color: '#C45C26' };
-      return { title: '接近完成', emoji: '😤', color: '#FF6B9D' };
-    }
-    if (!survived) {
+    if (!survived || reason === 'tip' || reason === 'miss') {
       if (layers <= 2) return { title: '散枱', emoji: '😅', color: '#A07858' };
-      if (layers <= 5) return { title: '半途出局', emoji: '🫠', color: '#C45C26' };
-      return { title: '差少少完美', emoji: '😤', color: '#E85A8A' };
+      if (layers <= 5) return { title: '半途倒塌', emoji: '🫠', color: '#C45C26' };
+      if (layers <= 10) return { title: '重心失控', emoji: '😤', color: '#E85A8A' };
+      if (layers <= 18) return { title: '高塔惜敗', emoji: '🏗️', color: '#FF6B9D' };
+      return { title: '摩天遺憾', emoji: '🌆', color: '#C45C26' };
     }
-    if (avgAcc >= 98 && perfects >= 8 && score >= 1550) {
+    if (layers >= 30 && avgAcc >= 92 && perfects >= 10) {
       return { title: '傳說廚神', emoji: '👑', color: '#D4A017' };
     }
-    if (avgAcc >= 95 && perfects >= 6 && score >= 1250) {
+    if (layers >= 22 && avgAcc >= 88 && perfects >= 7) {
       return { title: '米芝蓮主廚', emoji: '👨‍🍳', color: '#C9A227' };
     }
-    if (avgAcc >= 91 && perfects >= 4 && score >= 900) {
+    if (layers >= 15 && avgAcc >= 84) {
       return { title: '漢堡高手', emoji: '🍔', color: '#FF6B9D' };
     }
-    if (avgAcc >= 84) return { title: '穩陣大廚', emoji: '😎', color: '#C45C26' };
-    if (avgAcc >= 74) return { title: '合格廚師', emoji: '👍', color: '#8B6B4A' };
-    if (avgAcc >= 60) return { title: '學徒', emoji: '📝', color: '#A07858' };
+    if (layers >= 10) return { title: '穩陣大廚', emoji: '😎', color: '#C45C26' };
+    if (layers >= 6) return { title: '合格廚師', emoji: '👍', color: '#8B6B4A' };
+    if (layers >= 3) return { title: '學徒', emoji: '📝', color: '#A07858' };
     return { title: '再試多次', emoji: '💪', color: '#A07858' };
   }
 
@@ -552,20 +473,11 @@
   const resultCanvas = document.getElementById('resultCanvas');
   const scoreEl = document.getElementById('scoreEl');
   const layerEl = document.getElementById('layerEl');
-  const totalLayersEl = document.getElementById('totalLayersEl');
   const accEl = document.getElementById('accEl');
   const floatMsg = document.getElementById('floatMsg');
   const controlsHint = document.getElementById('controlsHint');
-  const timeEl = document.getElementById('timeEl');
-  const timeBarFill = document.getElementById('timeBarFill');
   const countdownEl = document.getElementById('countdown');
   const countdownNum = countdownEl.querySelector('.cd-num');
-  const touchPad = document.getElementById('touchPad');
-  const btnLeft = document.getElementById('btnLeft');
-  const btnRight = document.getElementById('btnRight');
-  const btnDrop = document.getElementById('btnDrop');
-
-  totalLayersEl.textContent = TOTAL_LAYERS;
 
   // ── Three.js scene ──────────────────────────────────────
   let W = 320, H = 480, dpr = 1;
@@ -869,6 +781,8 @@
     piece.mesh.position.set(cx - W / 2, worldY, 0);
     const s = piece.w / BASE_WIDTH;
     piece.mesh.scale.set(s, 1, Math.max(0.55, s * 0.95));
+    const lean = piece.lean || 0;
+    piece.mesh.rotation.z = lean;
   }
 
   // ── State ───────────────────────────────────────────────
@@ -886,7 +800,6 @@
   let dragPointerId = null;
   let dragMode = null; // 'abs' | 'rel'
   let lastPointerX = 0;
-  let padHold = 0; // -1 left, 1 right
   let countdownTimer = null;
   let floatTimer = null;
   let animId = null;
@@ -895,27 +808,56 @@
   let tableYWorld = 4;
   let shake = 0;
   let particles = [];
-  let timeLeft = ROUND_TIME;
   let lastTickTs = 0;
   let endReason = null;
   let runId = '';
   let runSeed = 0;
   let rnd = Math.random;
-  let ingredients = [];
+  let lastIngredientId = null;
+  let tipDir = 0;
+  let tipAngle = 0;
+  let tipOmega = 0;
+  let camLookY = 0;
+  let camPosY = 0;
+  let camPosZ = 0;
+  let collapsing = [];
 
-  function updateCamera() {
+  function stackHeightWorld() {
+    if (!stack.length) return 0;
+    const top = stack[stack.length - 1];
+    return tableYWorld + (tableY - top.y);
+  }
+
+  function updateCamera(force) {
     camera.aspect = W / Math.max(1, H);
     camera.fov = H < 420 ? 42 : 38;
-    camera.position.set(0, H * 0.26, Math.max(400, H * 0.78));
-    camera.lookAt(0, H * 0.18, 0);
+    const baseLook = H * 0.12;
+    const basePos = H * 0.22;
+    const baseZ = Math.max(400, H * 0.78);
+    const hWorld = stackHeightWorld();
+    const follow = Math.max(0, hWorld - tableYWorld - 40) * 0.55;
+    const targetLook = baseLook + follow;
+    const targetPos = basePos + follow * 0.85;
+    const targetZ = baseZ + follow * 0.35;
+    if (force || !camPosZ) {
+      camLookY = targetLook;
+      camPosY = targetPos;
+      camPosZ = targetZ;
+    } else {
+      camLookY += (targetLook - camLookY) * 0.08;
+      camPosY += (targetPos - camPosY) * 0.08;
+      camPosZ += (targetZ - camPosZ) * 0.08;
+    }
+    camera.position.set(0, camPosY, camPosZ);
+    camera.lookAt(0, camLookY, 0);
     camera.updateProjectionMatrix();
 
     dir.shadow.camera.left = -W * 0.55;
     dir.shadow.camera.right = W * 0.55;
-    dir.shadow.camera.top = H * 0.55;
+    dir.shadow.camera.top = H * 0.55 + follow;
     dir.shadow.camera.bottom = -H * 0.2;
     dir.shadow.camera.updateProjectionMatrix();
-    dir.position.set(W * 0.25, H * 0.7, 180);
+    dir.position.set(W * 0.25, H * 0.7 + follow, 180);
   }
 
   function resize() {
@@ -925,11 +867,11 @@
     H = box.clientHeight;
     renderer.setPixelRatio(dpr);
     renderer.setSize(W, H, false);
-    // Keep plate above bottom touch pad / browser chrome
-    const bottomClear = Math.max(78, Math.round(H * 0.14));
+    // Keep plate above browser chrome
+    const bottomClear = Math.max(48, Math.round(H * 0.08));
     tableY = H - bottomClear;
     tableGroup.position.set(0, tableYWorld - 4, 0);
-    updateCamera();
+    updateCamera(true);
     if (stack.length) {
       let y = tableY;
       for (let i = 0; i < stack.length; i++) {
@@ -943,7 +885,7 @@
   window.addEventListener('resize', resize);
 
   function canControl() {
-    return state === 'playing' || state === 'falling';
+    return (state === 'playing' || state === 'falling') && state !== 'tipping';
   }
 
   function moveBase(nx) {
@@ -954,6 +896,8 @@
     const dx = nx - (base.x + half);
     for (const p of stack) {
       p.x += dx;
+      if (p.cx != null) p.cx += dx;
+      else p.cx = p.x + p.w / 2;
       syncMesh(p);
     }
   }
@@ -972,31 +916,20 @@
 
   function onCanvasPointerDown(e) {
     if (!canControl()) return;
-    if (e.target && e.target.closest && e.target.closest('#touchPad, #overlay, button')) return;
+    if (e.target && e.target.closest && e.target.closest('#overlay, button')) return;
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     dragPointerId = e.pointerId;
     dragX = e.clientX;
     lastPointerX = e.clientX;
+    dragMode = 'abs';
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
     if (!stack.length) return;
     const base = stack[0];
     const baseCx = base.x + base.w / 2;
-    // Large side zones = bigger nudge; center = absolute drag to finger
-    const sideZone = Math.max(72, W * 0.22);
-    if (cx < sideZone) {
-      dragMode = 'rel';
-      nudgeBase(-42);
-    } else if (cx > W - sideZone) {
-      dragMode = 'rel';
-      nudgeBase(42);
-    } else {
-      dragMode = 'abs';
-      // Soft pull toward finger (not instant snap) for easier fine control
-      const blend = 0.55;
-      moveBase(baseCx + (cx - baseCx) * blend);
-    }
+    const blend = 0.65;
+    moveBase(baseCx + (cx - baseCx) * blend);
   }
 
   function onCanvasPointerMove(e) {
@@ -1004,16 +937,9 @@
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
-    const dxScreen = e.clientX - lastPointerX;
     lastPointerX = e.clientX;
     if (!stack.length) return;
-    const base = stack[0];
-    if (dragMode === 'rel') {
-      // Finger delta → stack move; slightly amplified for fat-finger phones
-      nudgeBase(dxScreen * 1.35);
-    } else {
-      moveBase(cx);
-    }
+    moveBase(cx);
     dragX = e.clientX;
   }
 
@@ -1034,49 +960,11 @@
     if (state === 'playing' || state === 'falling' || state === 'countdown') e.preventDefault();
   }, { passive: false });
 
-  function bindPad(btn, dir) {
-    const start = (e) => {
-      if (!canControl()) return;
-      e.preventDefault();
-      e.stopPropagation();
-      try { btn.setPointerCapture(e.pointerId); } catch (err) {}
-      padHold = dir;
-      btn.classList.add('held');
-      nudgeBase(dir * 36);
-    };
-    const end = () => {
-      padHold = 0;
-      btn.classList.remove('held');
-    };
-    btn.addEventListener('pointerdown', start, { passive: false });
-    btn.addEventListener('pointerup', end);
-    btn.addEventListener('pointercancel', end);
-    btn.addEventListener('lostpointercapture', end);
-  }
-  bindPad(btnLeft, -1);
-  bindPad(btnRight, 1);
-  btnDrop.addEventListener('pointerdown', (e) => {
-    if (!canControl() || !stack.length) return;
-    e.preventDefault();
-    e.stopPropagation();
-    // Nudge stack toward screen center (not alignment guide — just recenter base)
-    moveBase(W / 2);
-  }, { passive: false });
-
   window.addEventListener('keydown', (e) => {
     keys[e.key] = true;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ') e.preventDefault();
   });
   window.addEventListener('keyup', (e) => { keys[e.key] = false; });
-
-  function updateTimeBar() {
-    const ratio = Math.max(0, Math.min(1, timeLeft / ROUND_TIME));
-    timeBarFill.style.width = (ratio * 100) + '%';
-    timeEl.textContent = timeLeft.toFixed(1);
-    timeBarFill.classList.remove('warn', 'critical');
-    if (ratio <= 0.2) timeBarFill.classList.add('critical');
-    else if (ratio <= 0.4) timeBarFill.classList.add('warn');
-  }
 
   function formatHkTime(d) {
     try {
@@ -1120,15 +1008,17 @@
     clearPieces();
     score = 0; lastAcc = null; perfects = 0; accSum = 0; placed = 0;
     nextIdx = 0; fallSpeed = BASE_FALL_SPEED; shake = 0;
-    timeLeft = ROUND_TIME; endReason = null; lastTickTs = performance.now();
+    endReason = null; lastTickTs = performance.now();
+    lastIngredientId = null;
+    tipDir = 0; tipAngle = 0; tipOmega = 0;
+    collapsing = [];
 
     runId = makeRunId();
     runSeed = (Date.now() ^ (Math.floor(Math.random() * 0x7fffffff))) >>> 0;
     rnd = mulberry32(runSeed || 1);
-    ingredients = buildIngredientQueue(rnd);
 
     updateHUD();
-    updateTimeBar();
+    layerEl.textContent = '0';
 
     const bw = BASE_WIDTH;
     const base = {
@@ -1138,21 +1028,21 @@
       h: BUN_H,
       id: 'bottomBun',
       name: '底包',
+      lean: 0,
+      cx: W / 2,
     };
     stack = [base];
     attachMesh(base);
     falling = null;
     state = 'countdown';
     controlsHint.style.opacity = '0.85';
-    touchPad.classList.add('show');
+    updateCamera(true);
   }
 
   function beginPlayAfterCountdown() {
     if (state !== 'countdown') return;
     state = 'playing';
     lastTickTs = performance.now();
-    timeLeft = ROUND_TIME;
-    updateTimeBar();
     spawnNext();
   }
 
@@ -1184,27 +1074,75 @@
   }
 
   function spawnNext() {
-    if (nextIdx >= ingredients.length) {
-      endReason = 'complete';
-      endGame(true);
-      return;
-    }
-    const ing = ingredients[nextIdx];
+    if (state === 'over' || state === 'result' || state === 'tipping') return;
+    const ing = pickNextIngredient(rnd, nextIdx, lastIngredientId);
+    lastIngredientId = ing.id;
     const top = stack[stack.length - 1];
     const w = top.w;
     const h = ing.h;
+    // Spawn above current camera view
+    const spawnY = Math.min(-h - 10, stack[stack.length - 1].y - H * 0.55);
     falling = {
       x: Math.random() * (W - w - 40) + 20,
-      y: -h - 10,
+      y: spawnY,
       w, h,
       id: ing.id,
       name: ing.name,
       vy: fallSpeed,
+      lean: 0,
     };
     attachMesh(falling);
     state = 'falling';
     nextIdx++;
-    layerEl.textContent = Math.min(nextIdx, TOTAL_LAYERS);
+    layerEl.textContent = String(nextIdx);
+  }
+
+  function computeCOM() {
+    let com = 0, mass = 0;
+    for (const p of stack) {
+      const m = Math.max(1, p.w * p.h);
+      const cx = p.cx != null ? p.cx : (p.x + p.w / 2);
+      com += cx * m;
+      mass += m;
+    }
+    return mass > 0 ? com / mass : W / 2;
+  }
+
+  function balanceLabel(com) {
+    const base = stack[0];
+    const mid = base.x + base.w / 2;
+    const half = base.w / 2;
+    const off = Math.abs(com - mid) / Math.max(1, half);
+    const pct = Math.max(0, Math.round((1 - off) * 100));
+    return pct;
+  }
+
+  function startTip(dir) {
+    if (state === 'tipping' || state === 'over' || state === 'result') return;
+    tipDir = dir < 0 ? -1 : 1;
+    tipOmega = tipDir * 0.9;
+    tipAngle = tipDir * 0.04;
+    state = 'tipping';
+    endReason = 'tip';
+    showFloat('倒塌！', '#E85A8A');
+    shake = 14;
+    if (falling && falling.mesh) {
+      pieceRoot.remove(falling.mesh);
+      falling = null;
+    }
+    // Convert stack into collapsing debris with velocity
+    collapsing = stack.map((p, i) => {
+      const cx = p.cx != null ? p.cx : (p.x + p.w / 2);
+      return {
+        mesh: p.mesh,
+        vx: tipDir * (2.2 + i * 0.35) + (Math.random() - 0.5) * 1.5,
+        vy: 1.2 + Math.random() * 2,
+        omega: tipDir * (0.04 + Math.random() * 0.06),
+        life: 90 + i * 4,
+      };
+    });
+    stack = [];
+    setTimeout(() => endGame(false), 1100);
   }
 
   function showFloat(text, color) {
@@ -1222,62 +1160,72 @@
     const left = Math.max(f.x, top.x);
     const right = Math.min(f.x + f.w, top.x + top.w);
     const overlap = Math.max(0, right - left);
-    const ratio = overlap / f.w;
+    const ratio = overlap / Math.max(1, f.w);
     const accPct = Math.round(ratio * 100);
 
     const fCx = f.x + f.w / 2;
     const tCx = top.x + top.w / 2;
-    const centerOff = Math.abs(fCx - tCx);
-    const centerRatio = centerOff / top.w;
+    const centerOff = fCx - tCx;
+    const centerRatio = Math.abs(centerOff) / Math.max(1, top.w);
 
     if (ratio < MISS_THRESHOLD) {
       lastAcc = accPct;
-      accEl.textContent = accPct + '%';
-      showFloat('散枱！', '#E85A8A');
+      accEl.textContent = balanceLabel(computeCOM()) + '%';
+      showFloat('接唔到！', '#E85A8A');
       spawnMissParticles(f);
       shake = 12;
-      if (f.mesh) {
-        pieceRoot.remove(f.mesh);
-      }
+      if (f.mesh) pieceRoot.remove(f.mesh);
       falling = null;
-      state = 'over';
-      endReason = 'miss';
-      setTimeout(() => endGame(false), 900);
+      // Bad miss can also knock the tower if already leaning
+      const com = computeCOM();
+      const base = stack[0];
+      const mid = base.x + base.w / 2;
+      if (Math.abs(com - mid) > base.w * 0.28) {
+        startTip(com < mid ? -1 : 1);
+      } else {
+        state = 'over';
+        endReason = 'miss';
+        setTimeout(() => endGame(false), 900);
+      }
       return;
     }
 
-    const newW = Math.max(24, overlap);
+    // Support shrinks to overlap (physics contact surface)
+    const newW = Math.max(22, overlap);
     const newX = left;
     const newY = top.y - f.h;
+    const newCx = newX + newW / 2;
 
-    let pts = Math.round(ratio * 68);
+    // Lean from offset relative to piece below
+    const leanAdd = (centerOff / Math.max(1, top.w)) * 0.22;
+    const prevLean = top.lean || 0;
+    const newLean = prevLean + leanAdd;
+
+    let pts = Math.round(ratio * 70);
     let label = '好！';
     let color = '#C45C26';
-    if (centerRatio <= PERFECT_TOL && ratio >= 0.98) {
-      pts = Math.round(pts * 1.4) + 18;
+    if (centerRatio <= PERFECT_TOL && ratio >= 0.97) {
+      pts = Math.round(pts * 1.45) + 20;
       perfects++;
       label = '完美！';
       color = '#FF6B9D';
       spawnPerfectParticles(fCx, newY);
-    } else if (ratio >= 0.90) {
-      pts = Math.round(pts * 1.08);
-      label = '差唔多！';
+    } else if (ratio >= 0.88) {
+      pts = Math.round(pts * 1.1);
+      label = '穩陣！';
       color = '#FF8A5B';
-    } else if (ratio < 0.55) {
-      pts = Math.round(pts * 0.75);
-      label = '驚險…';
+    } else if (ratio < 0.52) {
+      pts = Math.round(pts * 0.7);
+      label = '晃！';
       color = '#A07858';
     }
 
-    pts += Math.floor(nextIdx * 2);
-    pts += Math.floor(Math.max(0, timeLeft) * 0.08);
+    pts += Math.floor(nextIdx * 3);
 
     score += pts;
     lastAcc = accPct;
     accSum += accPct;
     placed++;
-    updateHUD();
-    showFloat(label + ' +' + pts, color);
 
     if (f.mesh) {
       pieceRoot.remove(f.mesh);
@@ -1291,24 +1239,53 @@
       h: f.h,
       id: f.id,
       name: f.name,
+      lean: newLean,
+      cx: newCx,
     };
     stack.push(landed);
     attachMesh(landed);
 
+    // Propagate slight visual lean up the tower
+    for (let i = 1; i < stack.length; i++) {
+      const below = stack[i - 1];
+      const cur = stack[i];
+      const off = (cur.cx - below.cx) / Math.max(1, below.w);
+      cur.lean = (below.lean || 0) + off * 0.18;
+      syncMesh(cur);
+    }
+
     falling = null;
-    fallSpeed = BASE_FALL_SPEED + SPEED_INC * nextIdx;
+    fallSpeed = Math.min(MAX_FALL_SPEED, BASE_FALL_SPEED + SPEED_INC * nextIdx);
     state = 'playing';
 
+    const com = computeCOM();
+    const bal = balanceLabel(com);
+    accEl.textContent = bal + '%';
+    updateHUD();
+    showFloat(label + ' +' + pts, color);
+
+    // Physics tip check: COM outside support of base
+    const base = stack[0];
+    const supportL = base.x + base.w * TIP_SUPPORT;
+    const supportR = base.x + base.w * (1 - TIP_SUPPORT);
+    if (com < supportL || com > supportR || Math.abs(newLean) > TIP_ANGLE_MAX) {
+      startTip(com < (base.x + base.w / 2) ? -1 : 1);
+      return;
+    }
+
+    updateCamera(false);
+
+    // Keep stack in view by shifting down if needed (camera also follows)
     const topY = stack[stack.length - 1].y;
-    if (topY < 80) {
-      const shift = 80 - topY;
+    if (topY < 60) {
+      const shift = 60 - topY;
       for (const p of stack) {
         p.y += shift;
         syncMesh(p);
       }
     }
 
-    setTimeout(spawnNext, 280);
+    setTimeout(spawnNext, 260);
   }
 
   function updateHUD() {
@@ -1319,8 +1296,6 @@
   function endGame(survived) {
     state = 'result';
     controlsHint.style.opacity = '0';
-    touchPad.classList.remove('show');
-    padHold = 0;
     clearDrag();
     if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = null; }
     countdownEl.classList.remove('show');
@@ -1498,13 +1473,13 @@
     drawMiniStack(rctx, RW / 2, 270);
 
     let resultText = '完成';
-    if (reason === 'timeout') resultText = '時間到';
+    if (reason === 'tip') resultText = '物理倒塌';
     else if (!survived) resultText = '散枱出局';
 
     const ended = new Date();
     const lines = [
-      { label: '層數', value: placed + ' / ' + TOTAL_LAYERS },
-      { label: '平均對齊', value: avgAcc + '%' },
+      { label: '層數', value: String(placed) },
+      { label: '平均平衡', value: avgAcc + '%' },
       { label: '完美次數', value: String(perfects) },
       { label: '結果', value: resultText },
       { label: 'Run ID', value: runId },
@@ -1536,45 +1511,52 @@
     lastTickTs = ts;
 
     if (state === 'playing' || state === 'falling') {
-      timeLeft -= dt;
-      if (timeLeft <= 0) {
-        timeLeft = 0;
-        updateTimeBar();
-        if (state !== 'over' && state !== 'result') {
-          showFloat('時間到！', '#E85A8A');
-          shake = 10;
-          if (falling && falling.mesh) {
-            pieceRoot.remove(falling.mesh);
-          }
-          falling = null;
-          state = 'over';
-          endReason = 'timeout';
-          setTimeout(() => endGame(false), 700);
-        }
-      } else {
-        updateTimeBar();
-      }
-    }
-
-    if (state === 'playing' || state === 'falling') {
       let dx = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 5.2;
       if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 5.2;
-      if (padHold) dx += padHold * 7.5;
       if (dx && stack.length) {
         const base = stack[0];
         moveBase(base.x + base.w / 2 + dx);
+        // Moving base shifts COM relative to support — live balance check
+        const com = computeCOM();
+        const bal = balanceLabel(com);
+        accEl.textContent = bal + '%';
+        const b = stack[0];
+        const supportL = b.x + b.w * TIP_SUPPORT;
+        const supportR = b.x + b.w * (1 - TIP_SUPPORT);
+        if (stack.length >= 3 && (com < supportL || com > supportR)) {
+          startTip(com < (b.x + b.w / 2) ? -1 : 1);
+        }
       }
     }
 
-    if (state === 'falling' && falling) {
-      falling.y += falling.vy;
+    if (state === 'falling' && falling && stack.length) {
+      falling.vy = Math.min(MAX_FALL_SPEED + 2, falling.vy + GRAVITY * dt);
+      falling.y += falling.vy * (60 * dt); // scale to prior per-frame units ~60fps
       syncMesh(falling);
       const top = stack[stack.length - 1];
       if (falling.y + falling.h >= top.y) {
         falling.y = top.y - falling.h;
         syncMesh(falling);
         landPiece();
+      }
+    }
+
+    if (state === 'tipping') {
+      tipOmega += tipDir * 2.8 * dt;
+      tipAngle += tipOmega * dt;
+      for (let i = collapsing.length - 1; i >= 0; i--) {
+        const c = collapsing[i];
+        if (!c.mesh) continue;
+        c.mesh.position.x += c.vx;
+        c.mesh.position.y -= c.vy;
+        c.vy += 0.22;
+        c.mesh.rotation.z += c.omega;
+        c.life--;
+        if (c.life <= 0) {
+          pieceRoot.remove(c.mesh);
+          collapsing.splice(i, 1);
+        }
       }
     }
 
@@ -1598,6 +1580,10 @@
     const shakeY = shake ? (Math.random() - 0.5) * shake * 0.25 : 0;
     pieceRoot.position.x = shakeX;
     pieceRoot.position.y = shakeY;
+
+    if (state === 'playing' || state === 'falling' || state === 'tipping') {
+      updateCamera(false);
+    }
 
     renderer.render(scene, camera);
     animId = requestAnimationFrame(tick);
@@ -1624,7 +1610,6 @@
   });
 
   resize();
-  updateTimeBar();
   renderer.render(scene, camera);
   animId = requestAnimationFrame(tick);
 })();

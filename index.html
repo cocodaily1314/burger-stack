@@ -50,12 +50,12 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 14px;
+    padding: 8px 14px 6px;
     font-size: 0.85rem;
     font-weight: 600;
     background: rgba(255,255,255,0.55);
     backdrop-filter: blur(6px);
-    border-bottom: 1px solid rgba(255,180,140,0.35);
+    border-bottom: none;
     z-index: 4;
   }
   #hud .pill {
@@ -66,6 +66,54 @@
   }
   #hud .acc { color: #E85A8A; }
   #hud .score { color: #C45C26; }
+  #timeBarWrap {
+    flex: 0 0 auto;
+    padding: 0 14px 8px;
+    background: rgba(255,255,255,0.55);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(255,180,140,0.35);
+    z-index: 4;
+  }
+  #timeBarTrack {
+    position: relative;
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(255,220,190,0.7);
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(180,100,60,0.15);
+  }
+  #timeBarFill {
+    height: 100%;
+    width: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #FF8A5B, #FF6B9D 55%, #FFB347);
+    box-shadow: 0 0 8px rgba(255,107,157,0.35);
+    transition: width 0.08s linear, background 0.3s;
+    transform-origin: left center;
+  }
+  #timeBarFill.warn {
+    background: linear-gradient(90deg, #FFB347, #FF8A5B 60%, #E85A8A);
+  }
+  #timeBarFill.critical {
+    background: linear-gradient(90deg, #E85A8A, #C62828);
+    animation: pulseBar 0.55s ease-in-out infinite alternate;
+  }
+  @keyframes pulseBar {
+    from { filter: brightness(1); }
+    to { filter: brightness(1.15); }
+  }
+  #timeLabel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #5A3A22;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+    pointer-events: none;
+  }
   #canvasBox {
     flex: 1 1 auto;
     position: relative;
@@ -187,22 +235,28 @@
 <div id="wrap">
   <div id="banner">
     <h1>漢堡疊疊樂 🍔</h1>
-    <div class="hook">層層對齊，夢想就係完美漢堡！</div>
+    <div class="hook">靠眼力對齊，限時疊出完美漢堡！</div>
   </div>
   <div id="hud">
     <span class="pill score">分數 <span id="scoreEl">0</span></span>
     <span class="pill">層數 <span id="layerEl">0</span>/<span id="totalLayersEl">10</span></span>
     <span class="pill acc">對齊 <span id="accEl">—</span></span>
   </div>
+  <div id="timeBarWrap">
+    <div id="timeBarTrack">
+      <div id="timeBarFill"></div>
+      <div id="timeLabel"><span id="timeEl">45.0</span> 秒</div>
+    </div>
+  </div>
   <div id="canvasBox">
     <canvas id="game"></canvas>
     <div id="floatMsg"></div>
-    <div id="controlsHint">← 拖曳 / 方向鍵移動底盤 →</div>
+    <div id="controlsHint">← 拖曳／撳左半或右半／方向鍵移動底盤 →</div>
   </div>
   <div id="overlay">
     <div class="card" id="startCard">
       <h2>準備好未？🍔</h2>
-      <p class="sub">用手指或滑鼠左右移動底盤，接住由上跌落嘅材料。對齊越準分越高；偏離太多就會散枱！</p>
+      <p class="sub">用手指或滑鼠左右移動底盤，接住由上跌落嘅材料。冇度位指示，全靠眼力對齊；限時內疊到頂包，對齊越準分越高！</p>
       <button class="btn btn-primary" id="startBtn">開始疊漢堡</button>
     </div>
     <div id="resultScreen">
@@ -229,6 +283,8 @@
   const BASE_WIDTH = 160;
   const PIECE_H = 28;
   const BUN_H = 36;
+  const ROUND_TIME = 45;           // seconds for whole round
+  const SIDE_DEPTH = 5;            // visual side-face thickness (px)
 
   // Ingredient sequence (last is always top bun)
   const INGREDIENTS = [
@@ -245,7 +301,12 @@
   ];
 
   // Grades (HK funny titles)
-  function getGrade(score, avgAcc, perfects, layers, survived) {
+  function getGrade(score, avgAcc, perfects, layers, survived, reason) {
+    if (reason === 'timeout') {
+      if (layers <= 3) return { title: '時間大盜', emoji: '⏰', color: '#E85A8A' };
+      if (layers <= 6) return { title: '趕住收工包', emoji: '🏃', color: '#C45C26' };
+      return { title: '差少少就齊', emoji: '😤', color: '#FF6B9D' };
+    }
     if (!survived) {
       if (layers <= 2) return { title: '散枱新手', emoji: '😅', color: '#A07858' };
       if (layers <= 5) return { title: '半途而廢包', emoji: '🫠', color: '#C45C26' };
@@ -272,6 +333,8 @@
   const accEl = document.getElementById('accEl');
   const floatMsg = document.getElementById('floatMsg');
   const controlsHint = document.getElementById('controlsHint');
+  const timeEl = document.getElementById('timeEl');
+  const timeBarFill = document.getElementById('timeBarFill');
 
   totalLayersEl.textContent = TOTAL_LAYERS;
 
@@ -294,6 +357,9 @@
   let tableY = 0;
   let shake = 0;
   let particles = [];
+  let timeLeft = ROUND_TIME;
+  let lastTickTs = 0;
+  let endReason = null; // 'complete' | 'miss' | 'timeout'
 
   // ── Resize ──────────────────────────────────────────────
   function resize() {
@@ -307,7 +373,6 @@
     canvas.style.height = H + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     tableY = H - 48;
-    // Keep stack grounded
     if (stack.length) {
       let y = tableY;
       for (let i = 0; i < stack.length; i++) {
@@ -328,10 +393,23 @@
     for (const p of stack) p.x += dx;
   }
 
+  // L/R half-tap nudge + drag
   canvas.addEventListener('pointerdown', (e) => {
     if (state !== 'playing' && state !== 'falling') return;
     canvas.setPointerCapture(e.pointerId);
     dragX = e.clientX;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    // Quick tap on left/right half nudges the base
+    if (stack.length) {
+      const base = stack[0];
+      const mid = W / 2;
+      if (Math.abs(cx - (base.x + base.w / 2)) > base.w * 0.6) {
+        moveBase(base.x + base.w / 2 + (cx < mid ? -28 : 28));
+      } else {
+        moveBase(cx);
+      }
+    }
   });
   canvas.addEventListener('pointermove', (e) => {
     if (dragX == null) return;
@@ -348,11 +426,23 @@
   });
   window.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
+  // ── Timer HUD ───────────────────────────────────────────
+  function updateTimeBar() {
+    const ratio = Math.max(0, Math.min(1, timeLeft / ROUND_TIME));
+    timeBarFill.style.width = (ratio * 100) + '%';
+    timeEl.textContent = timeLeft.toFixed(1);
+    timeBarFill.classList.remove('warn', 'critical');
+    if (ratio <= 0.2) timeBarFill.classList.add('critical');
+    else if (ratio <= 0.4) timeBarFill.classList.add('warn');
+  }
+
   // ── Game flow ───────────────────────────────────────────
   function resetGame() {
     score = 0; lastAcc = null; perfects = 0; accSum = 0; placed = 0;
     nextIdx = 0; fallSpeed = BASE_FALL_SPEED; particles = []; shake = 0;
+    timeLeft = ROUND_TIME; endReason = null; lastTickTs = performance.now();
     updateHUD();
+    updateTimeBar();
     const bw = BASE_WIDTH;
     stack = [{
       x: (W - bw) / 2,
@@ -370,6 +460,7 @@
 
   function spawnNext() {
     if (nextIdx >= TOTAL_LAYERS) {
+      endReason = 'complete';
       endGame(true);
       return;
     }
@@ -402,21 +493,18 @@
     const top = stack[stack.length - 1];
     const f = falling;
 
-    // Horizontal overlap
     const left = Math.max(f.x, top.x);
     const right = Math.min(f.x + f.w, top.x + top.w);
     const overlap = Math.max(0, right - left);
-    const ratio = overlap / f.w; // how much of falling piece sits on top
+    const ratio = overlap / f.w;
     const accPct = Math.round(ratio * 100);
 
-    // Center alignment for perfect / score bonus
     const fCx = f.x + f.w / 2;
     const tCx = top.x + top.w / 2;
     const centerOff = Math.abs(fCx - tCx);
     const centerRatio = centerOff / top.w;
 
     if (ratio < MISS_THRESHOLD) {
-      // GAME OVER — piece falls off
       lastAcc = accPct;
       accEl.textContent = accPct + '%';
       showFloat('散枱！💥', '#E85A8A');
@@ -424,16 +512,15 @@
       shake = 12;
       falling = null;
       state = 'over';
+      endReason = 'miss';
       setTimeout(() => endGame(false), 900);
       return;
     }
 
-    // New piece sits on overlap region, width = overlap (stacker style)
     const newW = Math.max(24, overlap);
     const newX = left;
     const newY = top.y - f.h;
 
-    // Score: base from overlap %, bonus for near-perfect center
     let pts = Math.round(ratio * 100);
     let label = '好！';
     let color = '#C45C26';
@@ -452,7 +539,6 @@
       color = '#A07858';
     }
 
-    // Speed bonus for later layers
     pts += Math.floor(nextIdx * 2);
 
     score += pts;
@@ -475,7 +561,6 @@
     fallSpeed = BASE_FALL_SPEED + SPEED_INC * nextIdx;
     state = 'playing';
 
-    // Camera: if stack too tall, shift everything down a bit (keep top visible)
     const topY = stack[stack.length - 1].y;
     if (topY < 80) {
       const shift = 80 - topY;
@@ -494,8 +579,9 @@
     state = 'result';
     controlsHint.style.opacity = '0';
     const avgAcc = placed > 0 ? Math.round(accSum / placed) : 0;
-    const grade = getGrade(score, avgAcc, perfects, placed, survived);
-    drawResultCard(survived, avgAcc, grade);
+    const reason = endReason || (survived ? 'complete' : 'miss');
+    const grade = getGrade(score, avgAcc, perfects, placed, survived, reason);
+    drawResultCard(survived, avgAcc, grade, reason);
     startCard.style.display = 'none';
     resultScreen.classList.add('show');
     overlay.classList.remove('hidden');
@@ -528,219 +614,353 @@
     }
   }
 
-  // ── Drawing helpers ─────────────────────────────────────
-  function roundRect(x, y, w, h, r) {
+  // ── Drawing helpers (3D soft-serve polish) ──────────────
+  function roundRect(c, x, y, w, h, r) {
     const rr = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
-    ctx.closePath();
+    c.beginPath();
+    c.moveTo(x + rr, y);
+    c.arcTo(x + w, y, x + w, y + h, rr);
+    c.arcTo(x + w, y + h, x, y + h, rr);
+    c.arcTo(x, y + h, x, y, rr);
+    c.arcTo(x, y, x + w, y, rr);
+    c.closePath();
+  }
+
+  function softShadow(c, cx, yBottom, w, alpha) {
+    c.save();
+    c.globalAlpha = alpha == null ? 0.18 : alpha;
+    const g = c.createRadialGradient(cx, yBottom + 2, 1, cx, yBottom + 2, w * 0.5);
+    g.addColorStop(0, 'rgba(60,30,10,0.55)');
+    g.addColorStop(1, 'rgba(60,30,10,0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.ellipse(cx, yBottom + 3, w * 0.48, 5, 0, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+
+  function sideBand(c, x, y, w, h, depth, color) {
+    // Trapezoid side face under the piece for thickness
+    c.fillStyle = color;
+    c.beginPath();
+    c.moveTo(x, y + h);
+    c.lineTo(x + w, y + h);
+    c.lineTo(x + w - 2, y + h + depth);
+    c.lineTo(x + 2, y + h + depth);
+    c.closePath();
+    c.fill();
+  }
+
+  function topHighlight(c, x, y, w, h, rx) {
+    c.save();
+    c.globalAlpha = 0.35;
+    const g = c.createLinearGradient(x, y, x, y + h * 0.55);
+    g.addColorStop(0, 'rgba(255,255,255,0.7)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    roundRect(c, x + 3, y + 2, w - 6, Math.max(4, h * 0.4), rx || 6);
+    c.fill();
+    c.restore();
   }
 
   function drawIngredient(p, alpha) {
-    ctx.save();
-    if (alpha != null) ctx.globalAlpha = alpha;
+    drawIngredientOn(ctx, p, alpha);
+  }
+
+  function drawIngredientOn(c, p, alpha) {
+    c.save();
+    if (alpha != null) c.globalAlpha = alpha;
     const { x, y, w, h, id } = p;
     const cx = x + w / 2;
+    const d = Math.min(SIDE_DEPTH, Math.max(3, h * 0.28));
+
+    // Drop shadow first
+    softShadow(c, cx, y + h, w, 0.16);
 
     if (id === 'bottomBun' || id === 'topBun') {
-      // Soft golden bun, ¾/side view feel
       const isTop = id === 'topBun';
-      ctx.fillStyle = '#E8A04A';
       if (isTop) {
-        // Domed top
-        ctx.beginPath();
-        ctx.ellipse(cx, y + h * 0.55, w / 2, h * 0.55, 0, Math.PI, 0);
-        ctx.lineTo(x + w, y + h);
-        ctx.lineTo(x, y + h);
-        ctx.closePath();
-        ctx.fill();
-        // Highlight
-        ctx.fillStyle = 'rgba(255,230,180,0.45)';
-        ctx.beginPath();
-        ctx.ellipse(cx - w * 0.12, y + h * 0.35, w * 0.28, h * 0.22, -0.3, 0, Math.PI * 2);
-        ctx.fill();
-        // Sesame
-        ctx.fillStyle = '#F5E6C8';
-        for (let i = 0; i < 7; i++) {
-          const sx = x + w * (0.18 + (i % 4) * 0.2) + (i > 3 ? w * 0.08 : 0);
-          const sy = y + h * (0.25 + Math.floor(i / 4) * 0.22);
-          ctx.beginPath();
-          ctx.ellipse(sx, sy, 3, 2, 0.4, 0, Math.PI * 2);
-          ctx.fill();
+        // Side rim
+        c.fillStyle = '#C87830';
+        c.beginPath();
+        c.ellipse(cx, y + h - 2, w / 2, 6, 0, 0, Math.PI * 2);
+        c.fill();
+        // Domed body with gradient
+        const bunG = c.createLinearGradient(x, y, x, y + h);
+        bunG.addColorStop(0, '#F5C878');
+        bunG.addColorStop(0.45, '#E8A04A');
+        bunG.addColorStop(1, '#D4893A');
+        c.fillStyle = bunG;
+        c.beginPath();
+        c.ellipse(cx, y + h * 0.58, w / 2, h * 0.58, 0, Math.PI, 0);
+        c.lineTo(x + w, y + h - 2);
+        c.ellipse(cx, y + h - 2, w / 2, 5, 0, 0, Math.PI);
+        c.closePath();
+        c.fill();
+        // Soft highlight oval
+        c.fillStyle = 'rgba(255,245,210,0.5)';
+        c.beginPath();
+        c.ellipse(cx - w * 0.12, y + h * 0.32, w * 0.26, h * 0.2, -0.35, 0, Math.PI * 2);
+        c.fill();
+        // Sesame with tiny shadow
+        for (let i = 0; i < 8; i++) {
+          const sx = x + w * (0.16 + (i % 4) * 0.2) + (i > 3 ? w * 0.08 : 0);
+          const sy = y + h * (0.22 + Math.floor(i / 4) * 0.2);
+          c.fillStyle = 'rgba(180,120,60,0.25)';
+          c.beginPath();
+          c.ellipse(sx + 0.5, sy + 0.8, 3.2, 2.1, 0.4, 0, Math.PI * 2);
+          c.fill();
+          c.fillStyle = '#F8ECD4';
+          c.beginPath();
+          c.ellipse(sx, sy, 3, 1.9, 0.4, 0, Math.PI * 2);
+          c.fill();
         }
-        // Bottom rim
-        ctx.fillStyle = '#D4893A';
-        roundRect(x, y + h - 6, w, 6, 2);
-        ctx.fill();
       } else {
-        // Flat bottom bun with slight curve
-        roundRect(x, y, w, h, 10);
-        ctx.fill();
-        ctx.fillStyle = '#F0B86A';
-        roundRect(x + 2, y + 2, w - 4, h * 0.4, 8);
-        ctx.fill();
-        ctx.fillStyle = '#C87830';
-        roundRect(x, y + h - 8, w, 8, 4);
-        ctx.fill();
+        // Bottom bun: thick disc with side
+        sideBand(c, x, y, w, h, d, '#B86A28');
+        const bunG = c.createLinearGradient(x, y, x, y + h);
+        bunG.addColorStop(0, '#F2BC6A');
+        bunG.addColorStop(0.55, '#E09440');
+        bunG.addColorStop(1, '#C87830');
+        c.fillStyle = bunG;
+        roundRect(c, x, y, w, h, 12);
+        c.fill();
+        // Top ellipse face
+        c.fillStyle = '#F5C878';
+        c.beginPath();
+        c.ellipse(cx, y + 5, w * 0.48, 7, 0, 0, Math.PI * 2);
+        c.fill();
+        topHighlight(c, x, y, w, h, 10);
+        // Crumb edge
+        c.strokeStyle = 'rgba(180,100,40,0.25)';
+        c.lineWidth = 1.5;
+        c.beginPath();
+        c.ellipse(cx, y + h - 4, w * 0.46, 4, 0, 0, Math.PI);
+        c.stroke();
       }
     } else if (id === 'lettuce' || id === 'lettuce2') {
-      ctx.fillStyle = '#7CB342';
-      ctx.beginPath();
-      const waves = 5;
-      ctx.moveTo(x, y + h * 0.5);
+      sideBand(c, x - 2, y, w + 4, h, d - 1, '#558B2F');
+      const lg = c.createLinearGradient(x, y, x, y + h);
+      lg.addColorStop(0, '#9CCC65');
+      lg.addColorStop(1, '#689F38');
+      c.fillStyle = lg;
+      c.beginPath();
+      const waves = 6;
+      c.moveTo(x, y + h * 0.45);
       for (let i = 0; i <= waves; i++) {
         const px = x + (w / waves) * i;
-        const py = y + (i % 2 === 0 ? 2 : h - 2);
-        ctx.lineTo(px, py);
+        const py = y + (i % 2 === 0 ? 1 : h - 1);
+        c.quadraticCurveTo(px - w / waves / 2, (i % 2 === 0 ? h * 0.2 : h * 0.8) + y, px, py);
       }
-      ctx.lineTo(x + w, y + h * 0.5);
       for (let i = waves; i >= 0; i--) {
         const px = x + (w / waves) * i;
-        const py = y + h * 0.5 + (i % 2 === 0 ? 4 : -2);
-        ctx.lineTo(px, py);
+        const py = y + h * 0.55 + (i % 2 === 0 ? 3 : -3);
+        c.lineTo(px, py);
       }
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#9CCC65';
-      ctx.beginPath();
-      ctx.moveTo(x + 4, y + h * 0.45);
+      c.closePath();
+      c.fill();
+      c.fillStyle = 'rgba(200,240,140,0.45)';
+      c.beginPath();
+      c.moveTo(x + 6, y + h * 0.4);
       for (let i = 0; i <= 4; i++) {
-        ctx.lineTo(x + 4 + ((w - 8) / 4) * i, y + (i % 2 ? 4 : h - 6));
+        c.lineTo(x + 6 + ((w - 12) / 4) * i, y + (i % 2 ? 5 : h - 7));
       }
-      ctx.lineTo(x + w - 4, y + h * 0.5);
-      ctx.closePath();
-      ctx.fill();
+      c.lineTo(x + w - 6, y + h * 0.5);
+      c.closePath();
+      c.fill();
     } else if (id === 'tomato') {
-      ctx.fillStyle = '#E53935';
-      roundRect(x, y, w, h, h / 2);
-      ctx.fill();
-      ctx.fillStyle = '#EF5350';
-      roundRect(x + 3, y + 2, w - 6, h * 0.4, h / 3);
-      ctx.fill();
-      // Seeds hint
-      ctx.fillStyle = 'rgba(255,200,150,0.5)';
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.ellipse(x + w * (0.2 + i * 0.2), y + h * 0.55, 3, 2, 0, 0, Math.PI * 2);
-        ctx.fill();
+      sideBand(c, x, y, w, h, d, '#B71C1C');
+      const tg = c.createLinearGradient(x, y, x, y + h);
+      tg.addColorStop(0, '#EF5350');
+      tg.addColorStop(0.5, '#E53935');
+      tg.addColorStop(1, '#C62828');
+      c.fillStyle = tg;
+      roundRect(c, x, y, w, h, h / 2);
+      c.fill();
+      // Glossy top
+      c.fillStyle = 'rgba(255,200,200,0.4)';
+      c.beginPath();
+      c.ellipse(cx, y + h * 0.32, w * 0.38, h * 0.22, 0, 0, Math.PI * 2);
+      c.fill();
+      // Seeds
+      c.fillStyle = 'rgba(255,220,160,0.55)';
+      for (let i = 0; i < 5; i++) {
+        c.beginPath();
+        c.ellipse(x + w * (0.15 + i * 0.175), y + h * 0.58, 2.8, 1.8, 0.2, 0, Math.PI * 2);
+        c.fill();
       }
     } else if (id === 'cheese') {
-      ctx.fillStyle = '#FFC107';
-      ctx.beginPath();
-      ctx.moveTo(x - 4, y);
-      ctx.lineTo(x + w + 4, y);
-      ctx.lineTo(x + w - 2, y + h);
-      ctx.lineTo(x + 2, y + h);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#FFD54F';
-      ctx.beginPath();
-      ctx.moveTo(x, y + 2);
-      ctx.lineTo(x + w, y + 2);
-      ctx.lineTo(x + w - 4, y + h * 0.5);
-      ctx.lineTo(x + 4, y + h * 0.5);
-      ctx.closePath();
-      ctx.fill();
+      // Melted drip side
+      c.fillStyle = '#E6A800';
+      c.beginPath();
+      c.moveTo(x - 5, y + 2);
+      c.lineTo(x + w + 5, y + 2);
+      c.lineTo(x + w + 2, y + h + d);
+      c.lineTo(x - 2, y + h + d);
+      c.closePath();
+      c.fill();
+      const cg = c.createLinearGradient(x, y, x, y + h);
+      cg.addColorStop(0, '#FFE082');
+      cg.addColorStop(0.5, '#FFC107');
+      cg.addColorStop(1, '#FFB300');
+      c.fillStyle = cg;
+      c.beginPath();
+      c.moveTo(x - 5, y);
+      c.lineTo(x + w + 5, y);
+      c.lineTo(x + w - 1, y + h);
+      c.lineTo(x + 1, y + h);
+      c.closePath();
+      c.fill();
+      c.fillStyle = 'rgba(255,255,220,0.45)';
+      c.beginPath();
+      c.moveTo(x, y + 2);
+      c.lineTo(x + w, y + 2);
+      c.lineTo(x + w - 5, y + h * 0.45);
+      c.lineTo(x + 5, y + h * 0.45);
+      c.closePath();
+      c.fill();
     } else if (id === 'patty') {
-      ctx.fillStyle = '#5D4037';
-      roundRect(x, y, w, h, 8);
-      ctx.fill();
-      ctx.fillStyle = '#6D4C41';
-      roundRect(x + 3, y + 3, w - 6, h * 0.35, 6);
-      ctx.fill();
-      // Grill marks
-      ctx.strokeStyle = 'rgba(40,25,20,0.35)';
-      ctx.lineWidth = 2;
+      sideBand(c, x, y, w, h, d + 1, '#3E2723');
+      const pg = c.createLinearGradient(x, y, x, y + h);
+      pg.addColorStop(0, '#8D6E63');
+      pg.addColorStop(0.4, '#5D4037');
+      pg.addColorStop(1, '#4E342E');
+      c.fillStyle = pg;
+      roundRect(c, x, y, w, h, 10);
+      c.fill();
+      // Top face
+      c.fillStyle = '#6D4C41';
+      c.beginPath();
+      c.ellipse(cx, y + 5, w * 0.46, 5, 0, 0, Math.PI * 2);
+      c.fill();
+      // Grill marks with soft edges
+      c.strokeStyle = 'rgba(30,18,12,0.4)';
+      c.lineWidth = 2.2;
+      c.lineCap = 'round';
       for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(x + 10, y + 8 + i * 7);
-        ctx.lineTo(x + w - 10, y + 10 + i * 7);
-        ctx.stroke();
+        c.beginPath();
+        c.moveTo(x + 12, y + 9 + i * 7);
+        c.lineTo(x + w - 12, y + 11 + i * 7);
+        c.stroke();
       }
+      topHighlight(c, x, y, w, h, 8);
     } else if (id === 'onion') {
-      ctx.fillStyle = '#F8BBD0';
-      roundRect(x, y, w, h, h / 2);
-      ctx.fill();
-      ctx.strokeStyle = '#F48FB1';
-      ctx.lineWidth = 1.5;
+      sideBand(c, x, y, w, h, d - 1, '#F48FB1');
+      const og = c.createLinearGradient(x, y, x, y + h);
+      og.addColorStop(0, '#FCE4EC');
+      og.addColorStop(1, '#F8BBD0');
+      c.fillStyle = og;
+      roundRect(c, x, y, w, h, h / 2);
+      c.fill();
+      c.strokeStyle = 'rgba(244,143,177,0.7)';
+      c.lineWidth = 1.4;
       for (let i = 1; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(x + 6, y + (h / 3) * i);
-        ctx.lineTo(x + w - 6, y + (h / 3) * i);
-        ctx.stroke();
+        c.beginPath();
+        c.ellipse(cx, y + (h / 3) * i, w * 0.42, 2.5, 0, 0, Math.PI * 2);
+        c.stroke();
       }
+      topHighlight(c, x, y, w, h, h / 2);
     } else if (id === 'pickle') {
-      ctx.fillStyle = '#689F38';
-      roundRect(x, y, w, h, 4);
-      ctx.fill();
-      ctx.fillStyle = '#8BC34A';
+      sideBand(c, x, y, w, h, d - 1, '#33691E');
+      const pig = c.createLinearGradient(x, y, x, y + h);
+      pig.addColorStop(0, '#9CCC65');
+      pig.addColorStop(1, '#558B2F');
+      c.fillStyle = pig;
+      roundRect(c, x, y, w, h, 5);
+      c.fill();
       for (let i = 0; i < 5; i++) {
-        ctx.beginPath();
-        ctx.arc(x + w * (0.15 + i * 0.18), y + h * 0.5, 2.5, 0, Math.PI * 2);
-        ctx.fill();
+        c.fillStyle = 'rgba(255,255,200,0.35)';
+        c.beginPath();
+        c.arc(x + w * (0.14 + i * 0.18), y + h * 0.45, 2.6, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = '#7CB342';
+        c.beginPath();
+        c.arc(x + w * (0.14 + i * 0.18), y + h * 0.48, 2.2, 0, Math.PI * 2);
+        c.fill();
       }
     } else if (id === 'bacon') {
-      // Wavy strips
-      ctx.fillStyle = '#C62828';
-      roundRect(x, y, w, h, 3);
-      ctx.fill();
-      ctx.fillStyle = '#FFCC80';
+      sideBand(c, x, y, w, h, d - 1, '#8E0000');
+      const bg = c.createLinearGradient(x, y, x, y + h);
+      bg.addColorStop(0, '#E57373');
+      bg.addColorStop(1, '#C62828');
+      c.fillStyle = bg;
+      roundRect(c, x, y, w, h, 4);
+      c.fill();
       for (let i = 0; i < 3; i++) {
-        roundRect(x, y + 3 + i * 5, w, 3, 1);
-        ctx.fill();
+        const yy = y + 3 + i * 5;
+        const fat = c.createLinearGradient(x, yy, x + w, yy);
+        fat.addColorStop(0, '#FFE0B2');
+        fat.addColorStop(0.5, '#FFCC80');
+        fat.addColorStop(1, '#FFE0B2');
+        c.fillStyle = fat;
+        roundRect(c, x + 1, yy, w - 2, 3, 1);
+        c.fill();
       }
     } else if (id === 'egg') {
-      ctx.fillStyle = '#FFF8E1';
-      roundRect(x, y, w, h, h / 2);
-      ctx.fill();
-      ctx.fillStyle = '#FFC107';
-      ctx.beginPath();
-      ctx.ellipse(cx, y + h / 2, Math.min(w * 0.22, 16), h * 0.32, 0, 0, Math.PI * 2);
-      ctx.fill();
+      sideBand(c, x, y, w, h, d, '#E0D5B8');
+      const eg = c.createRadialGradient(cx, y + h * 0.4, 2, cx, y + h * 0.5, w * 0.5);
+      eg.addColorStop(0, '#FFFAF0');
+      eg.addColorStop(1, '#F0E6C8');
+      c.fillStyle = eg;
+      roundRect(c, x, y, w, h, h / 2);
+      c.fill();
+      // Yolk with 3D highlight
+      const yolkR = Math.min(w * 0.22, 16);
+      const yg = c.createRadialGradient(cx - 3, y + h / 2 - 2, 1, cx, y + h / 2, yolkR);
+      yg.addColorStop(0, '#FFE082');
+      yg.addColorStop(0.6, '#FFC107');
+      yg.addColorStop(1, '#FF8F00');
+      c.fillStyle = yg;
+      c.beginPath();
+      c.ellipse(cx, y + h / 2, yolkR, h * 0.32, 0, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.55)';
+      c.beginPath();
+      c.ellipse(cx - yolkR * 0.3, y + h / 2 - h * 0.1, yolkR * 0.28, h * 0.1, -0.4, 0, Math.PI * 2);
+      c.fill();
     } else {
-      ctx.fillStyle = '#A1887F';
-      roundRect(x, y, w, h, 6);
-      ctx.fill();
+      sideBand(c, x, y, w, h, d, '#6D4C41');
+      c.fillStyle = '#A1887F';
+      roundRect(c, x, y, w, h, 6);
+      c.fill();
+      topHighlight(c, x, y, w, h, 6);
     }
 
-    // Soft shadow under piece
-    ctx.globalAlpha = 0.12;
-    ctx.fillStyle = '#000';
-    ctx.beginPath();
-    ctx.ellipse(cx, y + h + 2, w * 0.42, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    c.restore();
   }
 
   function drawTable() {
-    // Cream table / plate area
     ctx.fillStyle = '#FFE8D0';
     ctx.fillRect(0, tableY, W, H - tableY);
     ctx.fillStyle = '#FFD9B8';
     ctx.fillRect(0, tableY, W, 4);
-    // Soft plate
-    ctx.fillStyle = '#FFF8F0';
+    // Soft plate with rim highlight
+    const pg = ctx.createRadialGradient(W / 2, tableY + 18, 4, W / 2, tableY + 18, Math.min(W * 0.42, 180));
+    pg.addColorStop(0, '#FFFFFF');
+    pg.addColorStop(0.7, '#FFF8F0');
+    pg.addColorStop(1, '#F0D8C0');
+    ctx.fillStyle = pg;
     ctx.beginPath();
     ctx.ellipse(W / 2, tableY + 18, Math.min(W * 0.42, 180), 14, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#F0D8C0';
+    ctx.strokeStyle = 'rgba(240,200,160,0.8)';
     ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(W / 2, tableY + 16, Math.min(W * 0.36, 150), 10, 0, Math.PI * 1.1, Math.PI * 1.9);
     ctx.stroke();
   }
 
   function drawBg() {
-    // Soft cream with subtle dots
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, '#FFE8D6');
     g.addColorStop(0.5, '#FFF5EB');
     g.addColorStop(1, '#FFEFD9');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(255,200,160,0.25)';
+    ctx.fillStyle = 'rgba(255,200,160,0.22)';
     for (let i = 0; i < 12; i++) {
       const px = (i * 97 + 40) % W;
       const py = (i * 73 + 30) % (H * 0.7);
@@ -751,13 +971,12 @@
   }
 
   // ── Result card ─────────────────────────────────────────
-  function drawResultCard(survived, avgAcc, grade) {
+  function drawResultCard(survived, avgAcc, grade, reason) {
     const rc = resultCanvas;
     const rctx = rc.getContext('2d');
     const RW = 360, RH = 640;
     rc.width = RW; rc.height = RH;
 
-    // Background
     const bg = rctx.createLinearGradient(0, 0, 0, RH);
     bg.addColorStop(0, '#FF6B9D');
     bg.addColorStop(0.22, '#FF8FB5');
@@ -766,28 +985,24 @@
     rctx.fillStyle = bg;
     rctx.fillRect(0, 0, RW, RH);
 
-    // Banner text
     rctx.fillStyle = '#fff';
     rctx.font = 'bold 26px "PingFang TC", "Noto Sans TC", sans-serif';
     rctx.textAlign = 'center';
     rctx.fillText('漢堡疊疊樂 🍔', RW / 2, 48);
     rctx.font = '14px "PingFang TC", "Noto Sans TC", sans-serif';
-    rctx.fillText('層層對齊，夢想就係完美漢堡！', RW / 2, 74);
+    rctx.fillText('靠眼力對齊，限時疊出完美漢堡！', RW / 2, 74);
 
-    // White card body
     rctx.fillStyle = '#FFF9F2';
-    roundRectPath(rctx, 24, 100, RW - 48, 480, 20);
+    roundRect(rctx, 24, 100, RW - 48, 480, 20);
     rctx.fill();
     rctx.strokeStyle = '#FFE0C2';
     rctx.lineWidth = 2;
     rctx.stroke();
 
-    // Grade
     rctx.fillStyle = grade.color;
     rctx.font = 'bold 22px "PingFang TC", "Noto Sans TC", sans-serif';
     rctx.fillText(grade.emoji + ' ' + grade.title, RW / 2, 150);
 
-    // Big score
     rctx.fillStyle = '#C45C26';
     rctx.font = 'bold 64px "PingFang TC", system-ui, sans-serif';
     rctx.fillText(String(score), RW / 2, 230);
@@ -795,15 +1010,17 @@
     rctx.fillStyle = '#8B6B4A';
     rctx.fillText('總分', RW / 2, 258);
 
-    // Mini burger preview
     drawMiniStack(rctx, RW / 2, 320);
 
-    // Breakdown
+    let resultText = '完成漢堡 ✅';
+    if (reason === 'timeout') resultText = '時間到 ⏰';
+    else if (!survived) resultText = '散枱出局 💥';
+
     const lines = [
       { label: '層數', value: placed + ' / ' + TOTAL_LAYERS },
       { label: '平均對齊%', value: avgAcc + '%' },
       { label: '完美次數', value: String(perfects) },
-      { label: '結果', value: survived ? '完成漢堡 ✅' : '散枱出局 💥' },
+      { label: '結果', value: resultText },
     ];
     rctx.font = '15px "PingFang TC", sans-serif';
     rctx.textAlign = 'left';
@@ -820,30 +1037,17 @@
       ly += 32;
     });
 
-    // Footer
     rctx.textAlign = 'center';
     rctx.fillStyle = '#A07858';
     rctx.font = '12px "PingFang TC", sans-serif';
     rctx.fillText('分享去 Threads，睇邊個疊得齊！', RW / 2, 610);
   }
 
-  function roundRectPath(c, x, y, w, h, r) {
-    c.beginPath();
-    c.moveTo(x + r, y);
-    c.arcTo(x + w, y, x + w, y + h, r);
-    c.arcTo(x + w, y + h, x, y + h, r);
-    c.arcTo(x, y + h, x, y, r);
-    c.arcTo(x, y, x + w, y, r);
-    c.closePath();
-  }
-
   function drawMiniStack(rctx, cx, cy) {
-    // Draw a simplified version of current stack centered
     if (!stack.length) return;
     const scale = 0.55;
     const totalH = stack.reduce((s, p) => s + p.h, 0) * scale;
     let y = cy + totalH / 2;
-    // Use average center of stack
     const avgCx = stack.reduce((s, p) => s + p.x + p.w / 2, 0) / stack.length;
     for (let i = 0; i < stack.length; i++) {
       const p = stack[i];
@@ -851,74 +1055,35 @@
       const mh = p.h * scale;
       const mx = cx - mw / 2 + (p.x + p.w / 2 - avgCx) * scale * 0.3;
       y -= mh;
-      // Temporarily draw using main ctx style via simple shapes on rctx
       drawIngredientOn(rctx, { x: mx, y, w: mw, h: mh, id: p.id }, 1);
     }
   }
 
-  function drawIngredientOn(c, p, alpha) {
-    // Lightweight port for result card (same shapes)
-    const prev = { ctx };
-    // Reuse by temporarily swapping — instead inline simplified
-    c.save();
-    if (alpha != null) c.globalAlpha = alpha;
-    const { x, y, w, h, id } = p;
-    const cx = x + w / 2;
-    const rr = (xx, yy, ww, hh, r) => {
-      const rad = Math.min(r, ww / 2, hh / 2);
-      c.beginPath();
-      c.moveTo(xx + rad, yy);
-      c.arcTo(xx + ww, yy, xx + ww, yy + hh, rad);
-      c.arcTo(xx + ww, yy + hh, xx, yy + hh, rad);
-      c.arcTo(xx, yy + hh, xx, yy, rad);
-      c.arcTo(xx, yy, xx + ww, yy, rad);
-      c.closePath();
-    };
-    if (id === 'bottomBun' || id === 'topBun') {
-      c.fillStyle = '#E8A04A';
-      if (id === 'topBun') {
-        c.beginPath();
-        c.ellipse(cx, y + h * 0.55, w / 2, h * 0.55, 0, Math.PI, 0);
-        c.lineTo(x + w, y + h); c.lineTo(x, y + h); c.closePath();
-        c.fill();
-        c.fillStyle = '#D4893A';
-        rr(x, y + h - 5, w, 5, 2); c.fill();
-      } else {
-        rr(x, y, w, h, 8); c.fill();
-        c.fillStyle = '#C87830';
-        rr(x, y + h - 6, w, 6, 3); c.fill();
-      }
-    } else if (id === 'lettuce' || id === 'lettuce2') {
-      c.fillStyle = '#7CB342';
-      rr(x, y, w, h, 4); c.fill();
-    } else if (id === 'tomato') {
-      c.fillStyle = '#E53935'; rr(x, y, w, h, h / 2); c.fill();
-    } else if (id === 'cheese') {
-      c.fillStyle = '#FFC107';
-      c.beginPath();
-      c.moveTo(x - 3, y); c.lineTo(x + w + 3, y);
-      c.lineTo(x + w - 2, y + h); c.lineTo(x + 2, y + h); c.closePath(); c.fill();
-    } else if (id === 'patty') {
-      c.fillStyle = '#5D4037'; rr(x, y, w, h, 6); c.fill();
-    } else if (id === 'onion') {
-      c.fillStyle = '#F8BBD0'; rr(x, y, w, h, h / 2); c.fill();
-    } else if (id === 'pickle') {
-      c.fillStyle = '#689F38'; rr(x, y, w, h, 3); c.fill();
-    } else if (id === 'bacon') {
-      c.fillStyle = '#C62828'; rr(x, y, w, h, 2); c.fill();
-    } else if (id === 'egg') {
-      c.fillStyle = '#FFF8E1'; rr(x, y, w, h, h / 2); c.fill();
-      c.fillStyle = '#FFC107';
-      c.beginPath(); c.ellipse(cx, y + h / 2, Math.min(w * 0.22, 12), h * 0.3, 0, 0, Math.PI * 2); c.fill();
-    } else {
-      c.fillStyle = '#A1887F'; rr(x, y, w, h, 4); c.fill();
-    }
-    c.restore();
-  }
-
   // ── Main loop ───────────────────────────────────────────
-  function tick() {
-    // Keyboard move
+  function tick(ts) {
+    if (!lastTickTs) lastTickTs = ts;
+    const dt = Math.min(0.05, (ts - lastTickTs) / 1000);
+    lastTickTs = ts;
+
+    // Countdown only while actively playing
+    if (state === 'playing' || state === 'falling') {
+      timeLeft -= dt;
+      if (timeLeft <= 0) {
+        timeLeft = 0;
+        updateTimeBar();
+        if (state !== 'over' && state !== 'result') {
+          showFloat('時間到！⏰', '#E85A8A');
+          shake = 10;
+          falling = null;
+          state = 'over';
+          endReason = 'timeout';
+          setTimeout(() => endGame(false), 700);
+        }
+      } else {
+        updateTimeBar();
+      }
+    }
+
     if (state === 'playing' || state === 'falling') {
       let dx = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 6;
@@ -938,7 +1103,6 @@
       }
     }
 
-    // Particles
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
@@ -959,18 +1123,12 @@
     drawBg();
     drawTable();
 
-    // Stack from bottom
+    // Draw stack bottom → top (no ghost / dashed guides / target markers)
     for (const p of stack) drawIngredient(p);
 
     if (falling) {
       drawIngredient(falling, 0.95);
-      // Ghost guide of current top width
-      const top = stack[stack.length - 1];
-      ctx.strokeStyle = 'rgba(255,107,157,0.35)';
-      ctx.setLineDash([4, 4]);
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(top.x, falling.y, top.w, falling.h);
-      ctx.setLineDash([]);
+      // Intentionally NO alignment guide / dashed outline / ghost target
     }
 
     for (const p of particles) {
@@ -1011,6 +1169,7 @@
 
   // Boot
   resize();
+  updateTimeBar();
   draw();
   animId = requestAnimationFrame(tick);
 })();

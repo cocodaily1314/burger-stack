@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>漢堡疊疊樂 🍔</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -23,56 +23,82 @@
     flex-direction: column;
     background: linear-gradient(180deg, #FFE8D6 0%, #FFF5EB 40%, #FFEFD9 100%);
     box-shadow: 0 0 40px rgba(180,100,60,0.12);
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
   #banner {
     flex: 0 0 auto;
     background: linear-gradient(135deg, #FF6B9D 0%, #FF8FB5 50%, #FF6B9D 100%);
     color: #fff;
     text-align: center;
-    padding: 12px 16px 14px;
+    padding: 10px 16px 12px;
     box-shadow: 0 4px 16px rgba(255,107,157,0.35);
-    z-index: 5;
+    z-index: 30;
+    position: relative;
   }
   #banner h1 {
-    font-size: 1.35rem;
+    font-size: 1.25rem;
     font-weight: 800;
     letter-spacing: 0.04em;
     text-shadow: 0 2px 0 rgba(0,0,0,0.1);
   }
   #banner .hook {
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     opacity: 0.95;
-    margin-top: 4px;
+    margin-top: 3px;
     font-weight: 500;
   }
+  /* HUD stays above canvas + overlays so 總分 never covered */
   #hud {
     flex: 0 0 auto;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 8px 14px 6px;
-    font-size: 0.85rem;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 10px 6px;
+    font-size: 0.8rem;
     font-weight: 600;
-    background: rgba(255,255,255,0.55);
-    backdrop-filter: blur(6px);
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(8px);
     border-bottom: none;
-    z-index: 4;
+    z-index: 40;
+    position: relative;
   }
   #hud .pill {
     background: #fff;
     border-radius: 999px;
-    padding: 4px 12px;
-    box-shadow: 0 2px 6px rgba(180,100,60,0.1);
+    padding: 6px 10px;
+    box-shadow: 0 2px 6px rgba(180,100,60,0.12);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #hud .pill.score {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #C45C26;
+    background: linear-gradient(135deg, #FFF8F0, #FFE8D0);
+    border: 2px solid #FFD0A8;
+    padding: 7px 12px;
+    z-index: 41;
+  }
+  #hud .pill.score #scoreEl {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
   }
   #hud .acc { color: #E85A8A; }
-  #hud .score { color: #C45C26; }
+  #hud .meta { color: #5A3A22; font-size: 0.75rem; }
   #timeBarWrap {
     flex: 0 0 auto;
-    padding: 0 14px 8px;
-    background: rgba(255,255,255,0.55);
-    backdrop-filter: blur(6px);
+    padding: 0 12px 8px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(8px);
     border-bottom: 1px solid rgba(255,180,140,0.35);
-    z-index: 4;
+    z-index: 40;
+    position: relative;
   }
   #timeBarTrack {
     position: relative;
@@ -118,6 +144,7 @@
     flex: 1 1 auto;
     position: relative;
     min-height: 0;
+    z-index: 1;
   }
   canvas#game {
     display: block;
@@ -127,6 +154,7 @@
     cursor: grab;
   }
   canvas#game:active { cursor: grabbing; }
+  /* Overlay only covers play area — never banner/HUD/time bar */
   #overlay {
     position: absolute;
     inset: 0;
@@ -135,13 +163,15 @@
     justify-content: center;
     background: rgba(61,41,20,0.45);
     z-index: 10;
-    padding: 16px;
+    padding: 12px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
   #overlay.hidden { display: none; }
   .card {
     background: #FFF9F2;
     border-radius: 20px;
-    padding: 22px 20px 18px;
+    padding: 20px 18px 16px;
     width: 100%;
     max-width: 340px;
     text-align: center;
@@ -149,21 +179,21 @@
     border: 2px solid #FFE0C2;
   }
   .card h2 {
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     margin-bottom: 6px;
     color: #C45C26;
   }
   .card .sub {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: #8B6B4A;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     line-height: 1.45;
   }
   .btn {
     display: inline-block;
     border: none;
     border-radius: 999px;
-    padding: 12px 28px;
+    padding: 12px 26px;
     font-size: 1rem;
     font-weight: 700;
     font-family: inherit;
@@ -183,29 +213,30 @@
     border: 2px solid #FFD0A8;
     box-shadow: 0 2px 8px rgba(180,100,60,0.1);
   }
-  #resultScreen { display: none; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 360px; }
+  #resultScreen { display: none; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 360px; }
   #resultScreen.show { display: flex; }
   #resultCanvas {
     width: 100%;
-    max-width: 320px;
+    max-width: 300px;
     border-radius: 16px;
     box-shadow: 0 8px 28px rgba(61,41,20,0.2);
     background: #FFF9F2;
   }
   .result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .hint {
-    font-size: 0.75rem;
-    color: rgba(255,255,255,0.9);
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.95);
     text-align: center;
-    margin-top: 4px;
+    margin-top: 2px;
     line-height: 1.4;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.25);
   }
   #floatMsg {
     position: absolute;
     left: 50%;
-    top: 28%;
+    top: 22%;
     transform: translate(-50%, 0);
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     font-weight: 800;
     color: #FF6B9D;
     text-shadow: 0 2px 8px rgba(255,255,255,0.9);
@@ -223,11 +254,21 @@
     bottom: 10px;
     left: 0; right: 0;
     text-align: center;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     color: #A07858;
     opacity: 0.85;
     pointer-events: none;
     z-index: 3;
+  }
+  #runTag {
+    font-size: 0.65rem;
+    color: #A07858;
+    text-align: center;
+    padding: 0 10px 4px;
+    background: rgba(255,255,255,0.92);
+    z-index: 40;
+    position: relative;
+    min-height: 1em;
   }
 </style>
 </head>
@@ -235,37 +276,38 @@
 <div id="wrap">
   <div id="banner">
     <h1>漢堡疊疊樂 🍔</h1>
-    <div class="hook">靠眼力對齊，限時疊出完美漢堡！</div>
+    <div class="hook">每局材料隨機 · 靠眼力對齊 · 限時挑戰！</div>
   </div>
   <div id="hud">
-    <span class="pill score">分數 <span id="scoreEl">0</span></span>
-    <span class="pill">層數 <span id="layerEl">0</span>/<span id="totalLayersEl">10</span></span>
+    <span class="pill score">總分 <span id="scoreEl">0</span></span>
+    <span class="pill meta">層 <span id="layerEl">0</span>/<span id="totalLayersEl">10</span></span>
     <span class="pill acc">對齊 <span id="accEl">—</span></span>
   </div>
   <div id="timeBarWrap">
     <div id="timeBarTrack">
       <div id="timeBarFill"></div>
-      <div id="timeLabel"><span id="timeEl">45.0</span> 秒</div>
+      <div id="timeLabel"><span id="timeEl">32.0</span> 秒</div>
     </div>
   </div>
+  <div id="runTag"><span id="runTagEl">準備中…</span></div>
   <div id="canvasBox">
     <canvas id="game"></canvas>
     <div id="floatMsg"></div>
     <div id="controlsHint">← 拖曳／撳左半或右半／方向鍵移動底盤 →</div>
-  </div>
-  <div id="overlay">
-    <div class="card" id="startCard">
-      <h2>準備好未？🍔</h2>
-      <p class="sub">用手指或滑鼠左右移動底盤，接住由上跌落嘅材料。冇度位指示，全靠眼力對齊；限時內疊到頂包，對齊越準分越高！</p>
-      <button class="btn btn-primary" id="startBtn">開始疊漢堡</button>
-    </div>
-    <div id="resultScreen">
-      <canvas id="resultCanvas" width="360" height="640"></canvas>
-      <div class="result-actions">
-        <button class="btn btn-primary" id="dlBtn">下載結果圖</button>
-        <button class="btn btn-secondary" id="retryBtn">再試一次</button>
+    <div id="overlay">
+      <div class="card" id="startCard">
+        <h2>準備好未？🍔</h2>
+        <p class="sub">每局材料池都會洗牌，偶爾仲有野味料！用手指或滑鼠左右移動底盤接住跌落材料。冇度位指示，全靠眼力；限時內疊到頂包，主廚頭銜極罕有！</p>
+        <button class="btn btn-primary" id="startBtn">開始疊漢堡</button>
       </div>
-      <p class="hint">💡 可將結果圖分享去 Threads，挑戰朋友疊得齊唔齊！</p>
+      <div id="resultScreen">
+        <canvas id="resultCanvas" width="360" height="720"></canvas>
+        <div class="result-actions">
+          <button class="btn btn-primary" id="dlBtn">下載結果圖</button>
+          <button class="btn btn-secondary" id="retryBtn">再試一次</button>
+        </div>
+        <p class="hint">💡 每局結果卡都獨一無二——下載後分享去 Threads 挑戰朋友！</p>
+      </div>
     </div>
   </div>
 </div>
@@ -274,20 +316,20 @@
 (function () {
   'use strict';
 
-  // ── Config ──────────────────────────────────────────────
+  // ── Config (tuned harder / faster) ──────────────────────
   const TOTAL_LAYERS = 10;          // including top bun as last
-  const MISS_THRESHOLD = 0.18;     // overlap ratio below this = game over
-  const PERFECT_TOL = 0.04;        // |center diff| / width <= this = perfect
-  const BASE_FALL_SPEED = 2.2;
-  const SPEED_INC = 0.22;
-  const BASE_WIDTH = 160;
+  const MISS_THRESHOLD = 0.26;     // stricter: more miss-outs
+  const PERFECT_TOL = 0.022;       // tighter perfect window
+  const BASE_FALL_SPEED = 3.4;     // was 2.2 — much faster
+  const SPEED_INC = 0.38;          // accelerates harder per layer
+  const BASE_WIDTH = 150;
   const PIECE_H = 28;
   const BUN_H = 36;
-  const ROUND_TIME = 45;           // seconds for whole round
-  const SIDE_DEPTH = 5;            // visual side-face thickness (px)
+  const ROUND_TIME = 32;           // was 45 — shorter round
+  const SIDE_DEPTH = 5;
 
-  // Ingredient sequence (last is always top bun)
-  const INGREDIENTS = [
+  // Core topping pool (order shuffled each run; top bun always last)
+  const CORE_TOPPINGS = [
     { id: 'lettuce', name: '生菜', h: 18 },
     { id: 'tomato',  name: '番茄', h: 22 },
     { id: 'cheese',  name: '芝士', h: 16 },
@@ -296,28 +338,142 @@
     { id: 'pickle',  name: '酸瓜', h: 16 },
     { id: 'bacon',   name: '煙肉', h: 18 },
     { id: 'egg',     name: '煎蛋', h: 22 },
-    { id: 'lettuce2',name: '生菜', h: 18 },
-    { id: 'topBun',  name: '頂包', h: BUN_H },
   ];
 
-  // Grades (HK funny titles)
+  // Wild toppings (original art, no trademarks) — occasional
+  const WILD_TOPPINGS = [
+    { id: 'avocado',  name: '牛油果', h: 18 },
+    { id: 'mushroom', name: '蘑菇', h: 18 },
+    { id: 'chili',    name: '辣椒', h: 16 },
+    { id: 'pineapple',name: '菠蘿', h: 18 },
+    { id: 'shrimp',   name: '炸蝦', h: 20 },
+    { id: 'corn',     name: '玉米', h: 16 },
+    { id: 'sauce',    name: '秘製醬', h: 14 },
+  ];
+
+  const TOP_BUN = { id: 'topBun', name: '頂包', h: BUN_H };
+
+  const COMBO_PREFIX = ['午夜', '斜斜', '火爆', '軟糯', '暴走', '神秘', '街坊', '極限', '亂撞', '閃避'];
+  const COMBO_SUFFIX = ['巨無霸', '塔', '炸彈', '俱樂部', '探險隊', '實驗體', '食堂特餐', '疊疊怪', '傳說包', '夜貓餐'];
+
+  const FORTUNE_LINES = [
+    '今日適合挑戰高分，但唔好貪快。',
+    '對齊靠感覺，感覺靠練習。',
+    '主廚之路，九成半人行唔到盡。',
+    '材料隨機，運氣都係技術一部分。',
+    '散枱唔緊要，再嚟過就係本事。',
+    '完美一層，勝過十層歪歪斜斜。',
+    '限時壓力下先見真功夫。',
+    '今日漢堡運：中上，記得下載結果卡。',
+    '野味料出現＝命運嘅玩笑，接住佢。',
+    '分享呢張卡，睇邊個先做到傳說。',
+    '眼快手快，心要定。',
+    '斜斜都得食，但分數就另講。',
+  ];
+
+  const STAMP_EMOJIS = ['🍔','🔥','✨','🎯','🍀','⚡','🌙','💎','🎢','🦞','🌶️','🧀'];
+
+  // Seeded PRNG (mulberry32)
+  function mulberry32(a) {
+    return function () {
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeRunId() {
+    const t = Date.now().toString(36).toUpperCase();
+    const r = Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+    return 'BS-' + t.slice(-5) + r;
+  }
+
+  function shuffleInPlace(arr, rnd) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  function buildIngredientQueue(rnd) {
+    // TOTAL_LAYERS falling pieces after bottom bun; last is always top bun
+    const midSlots = TOTAL_LAYERS - 1; // toppings before top bun
+
+    const core = CORE_TOPPINGS.map((x) => Object.assign({}, x));
+    shuffleInPlace(core, rnd);
+    const wild = WILD_TOPPINGS.map((x) => Object.assign({}, x));
+    shuffleInPlace(wild, rnd);
+
+    // 1–2 wilds most runs; ~25% chance of 3; rare 0
+    let wildN = 1;
+    const wr = rnd();
+    if (wr < 0.12) wildN = 0;
+    else if (wr < 0.55) wildN = 1;
+    else if (wr < 0.88) wildN = 2;
+    else wildN = 3;
+    wildN = Math.min(wildN, wild.length, midSlots - 3);
+
+    const chosen = [];
+    for (let i = 0; i < wildN; i++) chosen.push(wild[i]);
+    let ci = 0;
+    while (chosen.length < midSlots) {
+      chosen.push(core[ci % core.length]);
+      ci++;
+    }
+    shuffleInPlace(chosen, rnd);
+    // Avoid identical consecutive ids when possible
+    for (let i = 1; i < chosen.length; i++) {
+      if (chosen[i].id === chosen[i - 1].id) {
+        for (let j = i + 1; j < chosen.length; j++) {
+          if (chosen[j].id !== chosen[i - 1].id) {
+            const t = chosen[i]; chosen[i] = chosen[j]; chosen[j] = t;
+            break;
+          }
+        }
+      }
+    }
+    chosen.push(Object.assign({}, TOP_BUN));
+    return chosen;
+  }
+
+  function weirdComboName(names, rnd) {
+    const mid = names.filter((n) => n !== '底包' && n !== '頂包');
+    const a = mid.length ? mid[Math.floor(rnd() * mid.length)] : '神秘';
+    const b = mid.length > 1 ? mid[Math.floor(rnd() * mid.length)] : a;
+    const pref = COMBO_PREFIX[Math.floor(rnd() * COMBO_PREFIX.length)];
+    const suf = COMBO_SUFFIX[Math.floor(rnd() * COMBO_SUFFIX.length)];
+    if (rnd() < 0.45) return pref + a + suf;
+    return a + '×' + b + suf;
+  }
+
+  // Grades — elite rare
   function getGrade(score, avgAcc, perfects, layers, survived, reason) {
     if (reason === 'timeout') {
-      if (layers <= 3) return { title: '時間大盜', emoji: '⏰', color: '#E85A8A' };
-      if (layers <= 6) return { title: '趕住收工包', emoji: '🏃', color: '#C45C26' };
-      return { title: '差少少就齊', emoji: '😤', color: '#FF6B9D' };
+      if (layers <= 3) return { title: '時間大盜', emoji: '⏰', color: '#E85A8A', tier: 'C' };
+      if (layers <= 6) return { title: '趕住收工包', emoji: '🏃', color: '#C45C26', tier: 'C' };
+      return { title: '差少少就齊', emoji: '😤', color: '#FF6B9D', tier: 'B' };
     }
     if (!survived) {
-      if (layers <= 2) return { title: '散枱新手', emoji: '😅', color: '#A07858' };
-      if (layers <= 5) return { title: '半途而廢包', emoji: '🫠', color: '#C45C26' };
-      return { title: '差少少完美', emoji: '😤', color: '#E85A8A' };
+      if (layers <= 2) return { title: '散枱新手', emoji: '😅', color: '#A07858', tier: 'D' };
+      if (layers <= 5) return { title: '半途而廢包', emoji: '🫠', color: '#C45C26', tier: 'C' };
+      return { title: '差少少完美', emoji: '😤', color: '#E85A8A', tier: 'B' };
     }
-    if (avgAcc >= 95 && perfects >= 5) return { title: '米芝蓮主廚', emoji: '👨‍🍳', color: '#D4A017' };
-    if (avgAcc >= 90) return { title: '漢堡藝術家', emoji: '🎨', color: '#FF6B9D' };
-    if (avgAcc >= 80) return { title: '穩陣大廚', emoji: '😎', color: '#C45C26' };
-    if (avgAcc >= 70) return { title: '街坊食店級', emoji: '🏪', color: '#8B6B4A' };
-    if (avgAcc >= 55) return { title: '深夜食堂學徒', emoji: '🌙', color: '#A07858' };
-    return { title: '斜斜都得食', emoji: '🤪', color: '#A07858' };
+    // Completed — strict elite
+    if (avgAcc >= 97 && perfects >= 7 && score >= 1400) {
+      return { title: '傳說廚神', emoji: '👑', color: '#D4A017', tier: 'S' };
+    }
+    if (avgAcc >= 94 && perfects >= 5 && score >= 1100) {
+      return { title: '米芝蓮主廚', emoji: '👨‍🍳', color: '#C9A227', tier: 'A+' };
+    }
+    if (avgAcc >= 90 && perfects >= 3) {
+      return { title: '漢堡藝術家', emoji: '🎨', color: '#FF6B9D', tier: 'A' };
+    }
+    if (avgAcc >= 82) return { title: '穩陣大廚', emoji: '😎', color: '#C45C26', tier: 'B' };
+    if (avgAcc >= 72) return { title: '街坊食店級', emoji: '🏪', color: '#8B6B4A', tier: 'C' };
+    if (avgAcc >= 58) return { title: '深夜食堂學徒', emoji: '🌙', color: '#A07858', tier: 'C' };
+    return { title: '斜斜都得食', emoji: '🤪', color: '#A07858', tier: 'D' };
   }
 
   // ── DOM ─────────────────────────────────────────────────
@@ -335,13 +491,14 @@
   const controlsHint = document.getElementById('controlsHint');
   const timeEl = document.getElementById('timeEl');
   const timeBarFill = document.getElementById('timeBarFill');
+  const runTagEl = document.getElementById('runTagEl');
 
   totalLayersEl.textContent = TOTAL_LAYERS;
 
   // ── State ───────────────────────────────────────────────
   let W, H, dpr;
-  let state = 'start'; // start | playing | falling | landing | over | result
-  let stack = [];      // {x, y, w, h, id, name}
+  let state = 'start';
+  let stack = [];
   let falling = null;
   let score = 0;
   let lastAcc = null;
@@ -359,7 +516,16 @@
   let particles = [];
   let timeLeft = ROUND_TIME;
   let lastTickTs = 0;
-  let endReason = null; // 'complete' | 'miss' | 'timeout'
+  let endReason = null;
+
+  let runId = '';
+  let runSeed = 0;
+  let rnd = Math.random;
+  let ingredients = [];
+  let comboName = '';
+  let fortuneLine = '';
+  let stampEmoji = '🍔';
+  let runStartedAt = null;
 
   // ── Resize ──────────────────────────────────────────────
   function resize() {
@@ -393,14 +559,12 @@
     for (const p of stack) p.x += dx;
   }
 
-  // L/R half-tap nudge + drag
   canvas.addEventListener('pointerdown', (e) => {
     if (state !== 'playing' && state !== 'falling') return;
     canvas.setPointerCapture(e.pointerId);
     dragX = e.clientX;
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
-    // Quick tap on left/right half nudges the base
     if (stack.length) {
       const base = stack[0];
       const mid = W / 2;
@@ -414,8 +578,7 @@
   canvas.addEventListener('pointermove', (e) => {
     if (dragX == null) return;
     const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    moveBase(cx);
+    moveBase(e.clientX - rect.left);
   });
   canvas.addEventListener('pointerup', () => { dragX = null; });
   canvas.addEventListener('pointercancel', () => { dragX = null; });
@@ -426,7 +589,6 @@
   });
   window.addEventListener('keyup', (e) => { keys[e.key] = false; });
 
-  // ── Timer HUD ───────────────────────────────────────────
   function updateTimeBar() {
     const ratio = Math.max(0, Math.min(1, timeLeft / ROUND_TIME));
     timeBarFill.style.width = (ratio * 100) + '%';
@@ -436,13 +598,37 @@
     else if (ratio <= 0.4) timeBarFill.classList.add('warn');
   }
 
-  // ── Game flow ───────────────────────────────────────────
+  function formatHkTime(d) {
+    try {
+      return new Intl.DateTimeFormat('zh-HK', {
+        timeZone: 'Asia/Hong_Kong',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+      }).format(d) + ' (HK)';
+    } catch (e) {
+      return d.toISOString();
+    }
+  }
+
   function resetGame() {
     score = 0; lastAcc = null; perfects = 0; accSum = 0; placed = 0;
     nextIdx = 0; fallSpeed = BASE_FALL_SPEED; particles = []; shake = 0;
     timeLeft = ROUND_TIME; endReason = null; lastTickTs = performance.now();
+
+    runId = makeRunId();
+    runSeed = (Date.now() ^ (Math.floor(Math.random() * 0x7fffffff))) >>> 0;
+    rnd = mulberry32(runSeed || 1);
+    ingredients = buildIngredientQueue(rnd);
+    stampEmoji = STAMP_EMOJIS[Math.floor(rnd() * STAMP_EMOJIS.length)];
+    fortuneLine = FORTUNE_LINES[Math.floor(rnd() * FORTUNE_LINES.length)];
+    comboName = weirdComboName(ingredients.map((x) => x.name), rnd);
+    runStartedAt = new Date();
+
+    runTagEl.textContent = '本局 ' + runId + ' · seed ' + runSeed.toString(16).toUpperCase() + ' · ' + stampEmoji;
     updateHUD();
     updateTimeBar();
+
     const bw = BASE_WIDTH;
     stack = [{
       x: (W - bw) / 2,
@@ -459,12 +645,12 @@
   }
 
   function spawnNext() {
-    if (nextIdx >= TOTAL_LAYERS) {
+    if (nextIdx >= ingredients.length) {
       endReason = 'complete';
       endGame(true);
       return;
     }
-    const ing = INGREDIENTS[nextIdx];
+    const ing = ingredients[nextIdx];
     const top = stack[stack.length - 1];
     const w = top.w;
     const h = ing.h;
@@ -521,25 +707,29 @@
     const newX = left;
     const newY = top.y - f.h;
 
-    let pts = Math.round(ratio * 100);
+    // Stricter scoring curve
+    let pts = Math.round(ratio * 85);
     let label = '好！';
     let color = '#C45C26';
-    if (centerRatio <= PERFECT_TOL && ratio >= 0.95) {
-      pts = Math.round(pts * 1.5) + 20;
+    if (centerRatio <= PERFECT_TOL && ratio >= 0.97) {
+      pts = Math.round(pts * 1.55) + 25;
       perfects++;
       label = '完美！✨';
       color = '#FF6B9D';
       spawnPerfectParticles(fCx, newY);
-    } else if (ratio >= 0.85) {
-      pts = Math.round(pts * 1.15);
+    } else if (ratio >= 0.88) {
+      pts = Math.round(pts * 1.12);
       label = '差唔多！';
       color = '#FF8A5B';
-    } else if (ratio < 0.5) {
+    } else if (ratio < 0.55) {
+      pts = Math.round(pts * 0.85);
       label = '驚險…';
       color = '#A07858';
     }
 
-    pts += Math.floor(nextIdx * 2);
+    pts += Math.floor(nextIdx * 3);
+    // Small time bonus for remaining time (elite chase)
+    pts += Math.floor(Math.max(0, timeLeft) * 0.15);
 
     score += pts;
     lastAcc = accPct;
@@ -557,6 +747,11 @@
       name: f.name,
     });
 
+    // Refresh combo name from actual toppings used
+    comboName = weirdComboName(stack.map((p) => p.name).concat(
+      ingredients.slice(nextIdx).map((x) => x.name)
+    ), rnd);
+
     falling = null;
     fallSpeed = BASE_FALL_SPEED + SPEED_INC * nextIdx;
     state = 'playing';
@@ -567,7 +762,7 @@
       for (const p of stack) p.y += shift;
     }
 
-    setTimeout(spawnNext, 380);
+    setTimeout(spawnNext, 300);
   }
 
   function updateHUD() {
@@ -578,6 +773,8 @@
   function endGame(survived) {
     state = 'result';
     controlsHint.style.opacity = '0';
+    // Final combo from stacked pieces only
+    comboName = weirdComboName(stack.map((p) => p.name), rnd);
     const avgAcc = placed > 0 ? Math.round(accSum / placed) : 0;
     const reason = endReason || (survived ? 'complete' : 'miss');
     const grade = getGrade(score, avgAcc, perfects, placed, survived, reason);
@@ -587,7 +784,6 @@
     overlay.classList.remove('hidden');
   }
 
-  // ── Particles ───────────────────────────────────────────
   function spawnPerfectParticles(x, y) {
     for (let i = 0; i < 14; i++) {
       particles.push({
@@ -614,7 +810,6 @@
     }
   }
 
-  // ── Drawing helpers (3D soft-serve polish) ──────────────
   function roundRect(c, x, y, w, h, r) {
     const rr = Math.min(r, w / 2, h / 2);
     c.beginPath();
@@ -640,7 +835,6 @@
   }
 
   function sideBand(c, x, y, w, h, depth, color) {
-    // Trapezoid side face under the piece for thickness
     c.fillStyle = color;
     c.beginPath();
     c.moveTo(x, y + h);
@@ -674,18 +868,15 @@
     const cx = x + w / 2;
     const d = Math.min(SIDE_DEPTH, Math.max(3, h * 0.28));
 
-    // Drop shadow first
     softShadow(c, cx, y + h, w, 0.16);
 
     if (id === 'bottomBun' || id === 'topBun') {
       const isTop = id === 'topBun';
       if (isTop) {
-        // Side rim
         c.fillStyle = '#C87830';
         c.beginPath();
         c.ellipse(cx, y + h - 2, w / 2, 6, 0, 0, Math.PI * 2);
         c.fill();
-        // Domed body with gradient
         const bunG = c.createLinearGradient(x, y, x, y + h);
         bunG.addColorStop(0, '#F5C878');
         bunG.addColorStop(0.45, '#E8A04A');
@@ -697,12 +888,10 @@
         c.ellipse(cx, y + h - 2, w / 2, 5, 0, 0, Math.PI);
         c.closePath();
         c.fill();
-        // Soft highlight oval
         c.fillStyle = 'rgba(255,245,210,0.5)';
         c.beginPath();
         c.ellipse(cx - w * 0.12, y + h * 0.32, w * 0.26, h * 0.2, -0.35, 0, Math.PI * 2);
         c.fill();
-        // Sesame with tiny shadow
         for (let i = 0; i < 8; i++) {
           const sx = x + w * (0.16 + (i % 4) * 0.2) + (i > 3 ? w * 0.08 : 0);
           const sy = y + h * (0.22 + Math.floor(i / 4) * 0.2);
@@ -716,7 +905,6 @@
           c.fill();
         }
       } else {
-        // Bottom bun: thick disc with side
         sideBand(c, x, y, w, h, d, '#B86A28');
         const bunG = c.createLinearGradient(x, y, x, y + h);
         bunG.addColorStop(0, '#F2BC6A');
@@ -725,13 +913,11 @@
         c.fillStyle = bunG;
         roundRect(c, x, y, w, h, 12);
         c.fill();
-        // Top ellipse face
         c.fillStyle = '#F5C878';
         c.beginPath();
         c.ellipse(cx, y + 5, w * 0.48, 7, 0, 0, Math.PI * 2);
         c.fill();
         topHighlight(c, x, y, w, h, 10);
-        // Crumb edge
         c.strokeStyle = 'rgba(180,100,40,0.25)';
         c.lineWidth = 1.5;
         c.beginPath();
@@ -777,12 +963,10 @@
       c.fillStyle = tg;
       roundRect(c, x, y, w, h, h / 2);
       c.fill();
-      // Glossy top
       c.fillStyle = 'rgba(255,200,200,0.4)';
       c.beginPath();
       c.ellipse(cx, y + h * 0.32, w * 0.38, h * 0.22, 0, 0, Math.PI * 2);
       c.fill();
-      // Seeds
       c.fillStyle = 'rgba(255,220,160,0.55)';
       for (let i = 0; i < 5; i++) {
         c.beginPath();
@@ -790,7 +974,6 @@
         c.fill();
       }
     } else if (id === 'cheese') {
-      // Melted drip side
       c.fillStyle = '#E6A800';
       c.beginPath();
       c.moveTo(x - 5, y + 2);
@@ -828,12 +1011,10 @@
       c.fillStyle = pg;
       roundRect(c, x, y, w, h, 10);
       c.fill();
-      // Top face
       c.fillStyle = '#6D4C41';
       c.beginPath();
       c.ellipse(cx, y + 5, w * 0.46, 5, 0, 0, Math.PI * 2);
       c.fill();
-      // Grill marks with soft edges
       c.strokeStyle = 'rgba(30,18,12,0.4)';
       c.lineWidth = 2.2;
       c.lineCap = 'round';
@@ -904,7 +1085,6 @@
       c.fillStyle = eg;
       roundRect(c, x, y, w, h, h / 2);
       c.fill();
-      // Yolk with 3D highlight
       const yolkR = Math.min(w * 0.22, 16);
       const yg = c.createRadialGradient(cx - 3, y + h / 2 - 2, 1, cx, y + h / 2, yolkR);
       yg.addColorStop(0, '#FFE082');
@@ -917,6 +1097,109 @@
       c.fillStyle = 'rgba(255,255,255,0.55)';
       c.beginPath();
       c.ellipse(cx - yolkR * 0.3, y + h / 2 - h * 0.1, yolkR * 0.28, h * 0.1, -0.4, 0, Math.PI * 2);
+      c.fill();
+    } else if (id === 'avocado') {
+      sideBand(c, x, y, w, h, d, '#558B2F');
+      const ag = c.createLinearGradient(x, y, x, y + h);
+      ag.addColorStop(0, '#AED581');
+      ag.addColorStop(1, '#7CB342');
+      c.fillStyle = ag;
+      roundRect(c, x, y, w, h, h / 2);
+      c.fill();
+      c.fillStyle = '#F9A825';
+      c.beginPath();
+      c.ellipse(cx, y + h / 2, Math.min(w * 0.14, 10), h * 0.28, 0, 0, Math.PI * 2);
+      c.fill();
+      topHighlight(c, x, y, w, h, h / 2);
+    } else if (id === 'mushroom') {
+      sideBand(c, x, y, w, h, d, '#6D4C41');
+      const mg = c.createLinearGradient(x, y, x, y + h);
+      mg.addColorStop(0, '#EFEBE9');
+      mg.addColorStop(1, '#BCAAA4');
+      c.fillStyle = mg;
+      roundRect(c, x, y, w, h, 8);
+      c.fill();
+      c.fillStyle = 'rgba(121,85,72,0.35)';
+      for (let i = 0; i < 4; i++) {
+        c.beginPath();
+        c.arc(x + w * (0.2 + i * 0.2), y + h * 0.45, 3, 0, Math.PI * 2);
+        c.fill();
+      }
+      topHighlight(c, x, y, w, h, 6);
+    } else if (id === 'chili') {
+      sideBand(c, x, y, w, h, d - 1, '#B71C1C');
+      const chg = c.createLinearGradient(x, y, x + w, y + h);
+      chg.addColorStop(0, '#FF7043');
+      chg.addColorStop(1, '#D32F2F');
+      c.fillStyle = chg;
+      roundRect(c, x, y, w, h, 6);
+      c.fill();
+      c.fillStyle = '#2E7D32';
+      roundRect(c, x + w * 0.42, y - 2, w * 0.16, 5, 2);
+      c.fill();
+      topHighlight(c, x, y, w, h, 4);
+    } else if (id === 'pineapple') {
+      sideBand(c, x, y, w, h, d, '#F9A825');
+      const png = c.createLinearGradient(x, y, x, y + h);
+      png.addColorStop(0, '#FFE082');
+      png.addColorStop(1, '#FFB300');
+      c.fillStyle = png;
+      roundRect(c, x, y, w, h, 5);
+      c.fill();
+      c.strokeStyle = 'rgba(255,143,0,0.5)';
+      c.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        c.beginPath();
+        c.moveTo(x + 8, y + 5 + i * 5);
+        c.lineTo(x + w - 8, y + 7 + i * 5);
+        c.stroke();
+      }
+    } else if (id === 'shrimp') {
+      sideBand(c, x, y, w, h, d, '#E64A19');
+      const sg = c.createLinearGradient(x, y, x, y + h);
+      sg.addColorStop(0, '#FFAB91');
+      sg.addColorStop(1, '#FF7043');
+      c.fillStyle = sg;
+      roundRect(c, x, y, w, h, h / 2);
+      c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.45)';
+      c.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        c.beginPath();
+        c.arc(x + w * (0.2 + i * 0.2), y + h * 0.5, 4, Math.PI * 0.2, Math.PI * 0.8);
+        c.stroke();
+      }
+      topHighlight(c, x, y, w, h, h / 2);
+    } else if (id === 'corn') {
+      sideBand(c, x, y, w, h, d - 1, '#F9A825');
+      const cog = c.createLinearGradient(x, y, x, y + h);
+      cog.addColorStop(0, '#FFF59D');
+      cog.addColorStop(1, '#FFD54F');
+      c.fillStyle = cog;
+      roundRect(c, x, y, w, h, 4);
+      c.fill();
+      c.fillStyle = '#FFC107';
+      for (let row = 0; row < 2; row++) {
+        for (let i = 0; i < 6; i++) {
+          c.beginPath();
+          c.arc(x + w * (0.12 + i * 0.15), y + h * (0.35 + row * 0.35), 2.4, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+    } else if (id === 'sauce') {
+      c.fillStyle = '#BF360C';
+      c.beginPath();
+      c.moveTo(x + 4, y + 2);
+      c.quadraticCurveTo(x + w * 0.25, y + h + d, x + w * 0.4, y + h * 0.6);
+      c.quadraticCurveTo(x + w * 0.55, y + h + d + 2, x + w * 0.7, y + h * 0.5);
+      c.quadraticCurveTo(x + w * 0.85, y + h + d, x + w - 4, y + 2);
+      c.closePath();
+      c.fill();
+      const sag = c.createLinearGradient(x, y, x, y + h);
+      sag.addColorStop(0, '#FF8A65');
+      sag.addColorStop(1, '#E64A19');
+      c.fillStyle = sag;
+      roundRect(c, x, y, w, h * 0.7, 4);
       c.fill();
     } else {
       sideBand(c, x, y, w, h, d, '#6D4C41');
@@ -934,7 +1217,6 @@
     ctx.fillRect(0, tableY, W, H - tableY);
     ctx.fillStyle = '#FFD9B8';
     ctx.fillRect(0, tableY, W, 4);
-    // Soft plate with rim highlight
     const pg = ctx.createRadialGradient(W / 2, tableY + 18, 4, W / 2, tableY + 18, Math.min(W * 0.42, 180));
     pg.addColorStop(0, '#FFFFFF');
     pg.addColorStop(0.7, '#FFF8F0');
@@ -970,82 +1252,134 @@
     }
   }
 
-  // ── Result card ─────────────────────────────────────────
+  function wrapText(rctx, text, x, y, maxW, lineH) {
+    const chars = String(text).split('');
+    let line = '';
+    let yy = y;
+    for (let i = 0; i < chars.length; i++) {
+      const test = line + chars[i];
+      if (rctx.measureText(test).width > maxW && line) {
+        rctx.fillText(line, x, yy);
+        line = chars[i];
+        yy += lineH;
+      } else {
+        line = test;
+      }
+    }
+    if (line) rctx.fillText(line, x, yy);
+    return yy;
+  }
+
   function drawResultCard(survived, avgAcc, grade, reason) {
     const rc = resultCanvas;
     const rctx = rc.getContext('2d');
-    const RW = 360, RH = 640;
+    const RW = 360, RH = 720;
     rc.width = RW; rc.height = RH;
 
     const bg = rctx.createLinearGradient(0, 0, 0, RH);
     bg.addColorStop(0, '#FF6B9D');
-    bg.addColorStop(0.22, '#FF8FB5');
-    bg.addColorStop(0.22, '#FFF5EB');
+    bg.addColorStop(0.18, '#FF8FB5');
+    bg.addColorStop(0.18, '#FFF5EB');
     bg.addColorStop(1, '#FFE8D6');
     rctx.fillStyle = bg;
     rctx.fillRect(0, 0, RW, RH);
 
     rctx.fillStyle = '#fff';
-    rctx.font = 'bold 26px "PingFang TC", "Noto Sans TC", sans-serif';
+    rctx.font = 'bold 24px "PingFang TC", "Noto Sans TC", sans-serif';
     rctx.textAlign = 'center';
-    rctx.fillText('漢堡疊疊樂 🍔', RW / 2, 48);
-    rctx.font = '14px "PingFang TC", "Noto Sans TC", sans-serif';
-    rctx.fillText('靠眼力對齊，限時疊出完美漢堡！', RW / 2, 74);
+    rctx.fillText('漢堡疊疊樂 🍔', RW / 2, 42);
+    rctx.font = '12px "PingFang TC", "Noto Sans TC", sans-serif';
+    rctx.fillText('每局材料隨機 · 靠眼力對齊', RW / 2, 64);
 
     rctx.fillStyle = '#FFF9F2';
-    roundRect(rctx, 24, 100, RW - 48, 480, 20);
+    roundRect(rctx, 20, 82, RW - 40, 600, 20);
     rctx.fill();
     rctx.strokeStyle = '#FFE0C2';
     rctx.lineWidth = 2;
     rctx.stroke();
 
+    // Emoji stamp (unique per run)
+    rctx.save();
+    rctx.translate(RW - 58, 118);
+    rctx.rotate(0.35);
+    rctx.globalAlpha = 0.92;
+    rctx.font = '36px serif';
+    rctx.fillText(stampEmoji, 0, 0);
+    rctx.restore();
+
+    // Tier badge
+    rctx.fillStyle = grade.color;
+    rctx.font = 'bold 11px "PingFang TC", sans-serif';
+    rctx.fillText('稀有度 ' + (grade.tier || '?'), RW / 2, 112);
+
     rctx.fillStyle = grade.color;
     rctx.font = 'bold 22px "PingFang TC", "Noto Sans TC", sans-serif';
-    rctx.fillText(grade.emoji + ' ' + grade.title, RW / 2, 150);
+    rctx.fillText(grade.emoji + ' ' + grade.title, RW / 2, 142);
+
+    // Combo name
+    rctx.fillStyle = '#E85A8A';
+    rctx.font = 'bold 15px "PingFang TC", sans-serif';
+    const cn = '「' + comboName + '」';
+    if (rctx.measureText(cn).width > RW - 60) {
+      rctx.font = 'bold 13px "PingFang TC", sans-serif';
+    }
+    rctx.fillText(cn, RW / 2, 168);
 
     rctx.fillStyle = '#C45C26';
-    rctx.font = 'bold 64px "PingFang TC", system-ui, sans-serif';
-    rctx.fillText(String(score), RW / 2, 230);
-    rctx.font = '16px "PingFang TC", sans-serif';
+    rctx.font = 'bold 58px "PingFang TC", system-ui, sans-serif';
+    rctx.fillText(String(score), RW / 2, 235);
+    rctx.font = '15px "PingFang TC", sans-serif';
     rctx.fillStyle = '#8B6B4A';
     rctx.fillText('總分', RW / 2, 258);
 
-    drawMiniStack(rctx, RW / 2, 320);
+    drawMiniStack(rctx, RW / 2, 318);
 
     let resultText = '完成漢堡 ✅';
     if (reason === 'timeout') resultText = '時間到 ⏰';
     else if (!survived) resultText = '散枱出局 💥';
 
+    const ended = new Date();
     const lines = [
       { label: '層數', value: placed + ' / ' + TOTAL_LAYERS },
       { label: '平均對齊%', value: avgAcc + '%' },
       { label: '完美次數', value: String(perfects) },
       { label: '結果', value: resultText },
+      { label: 'Run ID', value: runId },
+      { label: 'Seed', value: runSeed.toString(16).toUpperCase() },
     ];
-    rctx.font = '15px "PingFang TC", sans-serif';
+    rctx.font = '13px "PingFang TC", sans-serif';
     rctx.textAlign = 'left';
-    let ly = 400;
+    let ly = 395;
     lines.forEach((ln) => {
       rctx.fillStyle = '#A07858';
-      rctx.fillText(ln.label, 56, ly);
+      rctx.fillText(ln.label, 48, ly);
       rctx.fillStyle = '#3D2914';
       rctx.textAlign = 'right';
-      rctx.font = 'bold 15px "PingFang TC", sans-serif';
-      rctx.fillText(ln.value, RW - 56, ly);
+      rctx.font = 'bold 13px "PingFang TC", sans-serif';
+      rctx.fillText(ln.value, RW - 48, ly);
       rctx.textAlign = 'left';
-      rctx.font = '15px "PingFang TC", sans-serif';
-      ly += 32;
+      rctx.font = '13px "PingFang TC", sans-serif';
+      ly += 26;
     });
 
+    // 廚神簽
     rctx.textAlign = 'center';
-    rctx.fillStyle = '#A07858';
+    rctx.fillStyle = '#C45C26';
+    rctx.font = 'bold 13px "PingFang TC", sans-serif';
+    rctx.fillText('—— 廚神簽 ——', RW / 2, ly + 8);
+    rctx.fillStyle = '#5A3A22';
     rctx.font = '12px "PingFang TC", sans-serif';
-    rctx.fillText('分享去 Threads，睇邊個疊得齊！', RW / 2, 610);
+    wrapText(rctx, fortuneLine, RW / 2, ly + 28, RW - 70, 18);
+
+    rctx.fillStyle = '#A07858';
+    rctx.font = '11px "PingFang TC", sans-serif';
+    rctx.fillText(formatHkTime(ended), RW / 2, 660);
+    rctx.fillText('分享去 Threads，睇邊個疊得齊！', RW / 2, 680);
   }
 
   function drawMiniStack(rctx, cx, cy) {
     if (!stack.length) return;
-    const scale = 0.55;
+    const scale = 0.5;
     const totalH = stack.reduce((s, p) => s + p.h, 0) * scale;
     let y = cy + totalH / 2;
     const avgCx = stack.reduce((s, p) => s + p.x + p.w / 2, 0) / stack.length;
@@ -1059,13 +1393,11 @@
     }
   }
 
-  // ── Main loop ───────────────────────────────────────────
   function tick(ts) {
     if (!lastTickTs) lastTickTs = ts;
     const dt = Math.min(0.05, (ts - lastTickTs) / 1000);
     lastTickTs = ts;
 
-    // Countdown only while actively playing
     if (state === 'playing' || state === 'falling') {
       timeLeft -= dt;
       if (timeLeft <= 0) {
@@ -1086,8 +1418,8 @@
 
     if (state === 'playing' || state === 'falling') {
       let dx = 0;
-      if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 6;
-      if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 6;
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 6.5;
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 6.5;
       if (dx) {
         const base = stack[0];
         moveBase(base.x + base.w / 2 + dx);
@@ -1122,15 +1454,10 @@
     }
     drawBg();
     drawTable();
-
-    // Draw stack bottom → top (no ghost / dashed guides / target markers)
     for (const p of stack) drawIngredient(p);
-
     if (falling) {
       drawIngredient(falling, 0.95);
-      // Intentionally NO alignment guide / dashed outline / ghost target
     }
-
     for (const p of particles) {
       ctx.globalAlpha = Math.min(1, p.life / 20);
       ctx.fillStyle = p.color;
@@ -1142,7 +1469,6 @@
     ctx.restore();
   }
 
-  // ── Buttons ─────────────────────────────────────────────
   document.getElementById('startBtn').addEventListener('click', () => {
     overlay.classList.add('hidden');
     resultScreen.classList.remove('show');
@@ -1163,11 +1489,10 @@
     const url = resultCanvas.toDataURL('image/png');
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'burger-stack-result.png';
+    a.download = 'burger-stack-' + (runId || 'result') + '.png';
     a.click();
   });
 
-  // Boot
   resize();
   updateTimeBar();
   draw();

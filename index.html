@@ -39,33 +39,35 @@
     background: linear-gradient(135deg, #FF6B9D 0%, #FF8FB5 50%, #FF6B9D 100%);
     color: #fff;
     text-align: center;
-    padding: 10px 16px 12px;
-    box-shadow: 0 4px 16px rgba(255,107,157,0.35);
+    padding: 6px 12px 7px;
+    box-shadow: 0 2px 10px rgba(255,107,157,0.28);
     z-index: 30;
     position: relative;
   }
   #banner h1 {
-    font-size: 1.25rem;
+    font-size: 1.05rem;
     font-weight: 800;
     letter-spacing: 0.04em;
-    text-shadow: 0 2px 0 rgba(0,0,0,0.1);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.1);
+    line-height: 1.2;
   }
   #banner .hook {
-    font-size: 0.85rem;
+    font-size: 0.72rem;
     opacity: 0.95;
-    margin-top: 3px;
+    margin-top: 1px;
     font-weight: 500;
+    line-height: 1.2;
   }
   #hud {
     flex: 0 0 auto;
     display: flex;
     justify-content: space-between;
     align-items: stretch;
-    gap: 6px;
-    padding: 8px 10px 6px;
-    font-size: 0.88rem;
+    gap: 4px;
+    padding: 5px 8px 4px;
+    font-size: 0.78rem;
     font-weight: 600;
-    background: rgba(255,255,255,0.92);
+    background: rgba(255,255,255,0.94);
     backdrop-filter: blur(8px);
     z-index: 40;
     position: relative;
@@ -73,8 +75,8 @@
   #hud .pill {
     background: #fff;
     border-radius: 999px;
-    padding: 6px 10px;
-    box-shadow: 0 2px 6px rgba(180,100,60,0.12);
+    padding: 4px 8px;
+    box-shadow: 0 1px 4px rgba(180,100,60,0.1);
     white-space: nowrap;
     display: flex;
     align-items: center;
@@ -83,12 +85,12 @@
   #hud .pill.score {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 800;
     color: #C45C26;
     background: linear-gradient(135deg, #FFF8F0, #FFE8D0);
-    border: 2px solid #FFD0A8;
-    padding: 7px 12px;
+    border: 1.5px solid #FFD0A8;
+    padding: 4px 10px;
     z-index: 41;
   }
   #hud .pill.score #scoreEl {
@@ -96,11 +98,11 @@
     letter-spacing: 0.02em;
   }
   #hud .acc { color: #E85A8A; }
-  #hud .meta { color: #5A3A22; font-size: 0.82rem; }
+  #hud .meta { color: #5A3A22; font-size: 0.74rem; }
   #timeBarWrap {
     flex: 0 0 auto;
-    padding: 0 12px 8px;
-    background: rgba(255,255,255,0.92);
+    padding: 0 10px 5px;
+    background: rgba(255,255,255,0.94);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid rgba(255,180,140,0.35);
     z-index: 40;
@@ -108,7 +110,7 @@
   }
   #timeBarTrack {
     position: relative;
-    height: 12px;
+    height: 10px;
     border-radius: 999px;
     background: rgba(255,220,190,0.7);
     overflow: hidden;
@@ -257,15 +259,113 @@
   }
   #controlsHint {
     position: absolute;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0));
+    bottom: calc(56px + env(safe-area-inset-bottom, 0));
     left: 0; right: 0;
     text-align: center;
-    font-size: 0.82rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #A07858;
-    opacity: 0.9;
+    opacity: 0.85;
     pointer-events: none;
     z-index: 3;
+  }
+  #countdown {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 15;
+    pointer-events: none;
+    background: rgba(61,41,20,0.28);
+  }
+  #countdown.show { display: flex; }
+  #countdown .cd-num {
+    font-size: clamp(3.2rem, 22vw, 5.5rem);
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 4px 24px rgba(61,41,20,0.45), 0 0 2px rgba(255,107,157,0.8);
+    animation: cdPop 0.45s ease-out;
+  }
+  @keyframes cdPop {
+    0% { transform: scale(0.55); opacity: 0.3; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  #touchPad {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 0;
+    height: calc(72px + env(safe-area-inset-bottom, 0));
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    display: none;
+    grid-template-columns: 1fr 1.15fr 1fr;
+    gap: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 6px;
+    z-index: 8;
+    background: linear-gradient(180deg, transparent 0%, rgba(255,245,235,0.82) 35%, rgba(255,245,235,0.95) 100%);
+    pointer-events: none;
+  }
+  #touchPad.show { display: grid; }
+  #touchPad button {
+    pointer-events: auto;
+    border: none;
+    border-radius: 16px;
+    font-family: inherit;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #C45C26;
+    background: rgba(255,255,255,0.92);
+    box-shadow: 0 2px 10px rgba(180,100,60,0.18);
+    min-height: 52px;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #touchPad button:active,
+  #touchPad button.held {
+    background: linear-gradient(135deg, #FF6B9D, #FF8A5B);
+    color: #fff;
+    transform: scale(0.97);
+  }
+  #touchPad .dropBtn {
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+  }
+  #overlay {
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0));
+    align-items: flex-start;
+    padding-top: max(8px, env(safe-area-inset-top, 0));
+  }
+  #resultScreen {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #resultCanvas {
+    max-width: min(300px, 78vw);
+    max-height: 42vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+  .result-actions {
+    position: sticky;
+    bottom: 0;
+    padding-bottom: 4px;
+    background: transparent;
+  }
+  @media (max-height: 700px) {
+    #banner { padding: 4px 10px 5px; }
+    #banner h1 { font-size: 0.95rem; }
+    #banner .hook { display: none; }
+    #hud { padding: 3px 6px 2px; font-size: 0.72rem; }
+    #timeBarWrap { padding: 0 8px 3px; }
+    #timeBarTrack { height: 8px; }
+    #timeLabel { font-size: 0.68rem; }
   }
 </style>
 </head>
@@ -289,7 +389,13 @@
   <div id="canvasBox">
     <canvas id="game"></canvas>
     <div id="floatMsg"></div>
-    <div id="controlsHint">拖曳／撳左或右／← → 移動底盤</div>
+    <div id="countdown" aria-live="polite"><span class="cd-num"></span></div>
+    <div id="controlsHint">拖曳移動 · 撳左右細調</div>
+    <div id="touchPad">
+      <button type="button" id="btnLeft" aria-label="向左">◀</button>
+      <button type="button" id="btnDrop" class="dropBtn" aria-label="移去中間">移中</button>
+      <button type="button" id="btnRight" aria-label="向右">▶</button>
+    </div>
     <div id="overlay">
       <div class="card" id="startCard">
         <h2>準備好未？🍔</h2>
@@ -452,6 +558,12 @@
   const controlsHint = document.getElementById('controlsHint');
   const timeEl = document.getElementById('timeEl');
   const timeBarFill = document.getElementById('timeBarFill');
+  const countdownEl = document.getElementById('countdown');
+  const countdownNum = countdownEl.querySelector('.cd-num');
+  const touchPad = document.getElementById('touchPad');
+  const btnLeft = document.getElementById('btnLeft');
+  const btnRight = document.getElementById('btnRight');
+  const btnDrop = document.getElementById('btnDrop');
 
   totalLayersEl.textContent = TOTAL_LAYERS;
 
@@ -771,6 +883,11 @@
   let nextIdx = 0;
   let keys = {};
   let dragX = null;
+  let dragPointerId = null;
+  let dragMode = null; // 'abs' | 'rel'
+  let lastPointerX = 0;
+  let padHold = 0; // -1 left, 1 right
+  let countdownTimer = null;
   let floatTimer = null;
   let animId = null;
   let fallSpeed = BASE_FALL_SPEED;
@@ -788,9 +905,9 @@
 
   function updateCamera() {
     camera.aspect = W / Math.max(1, H);
-    camera.fov = 38;
-    camera.position.set(0, H * 0.28, Math.max(380, H * 0.72));
-    camera.lookAt(0, H * 0.22, 0);
+    camera.fov = H < 420 ? 42 : 38;
+    camera.position.set(0, H * 0.26, Math.max(400, H * 0.78));
+    camera.lookAt(0, H * 0.18, 0);
     camera.updateProjectionMatrix();
 
     dir.shadow.camera.left = -W * 0.55;
@@ -808,7 +925,9 @@
     H = box.clientHeight;
     renderer.setPixelRatio(dpr);
     renderer.setSize(W, H, false);
-    tableY = H - 56;
+    // Keep plate above bottom touch pad / browser chrome
+    const bottomClear = Math.max(78, Math.round(H * 0.14));
+    tableY = H - bottomClear;
     tableGroup.position.set(0, tableYWorld - 4, 0);
     updateCamera();
     if (stack.length) {
@@ -823,8 +942,12 @@
   }
   window.addEventListener('resize', resize);
 
+  function canControl() {
+    return state === 'playing' || state === 'falling';
+  }
+
   function moveBase(nx) {
-    if (!stack.length || state === 'over' || state === 'result' || state === 'start') return;
+    if (!stack.length || !canControl()) return;
     const base = stack[0];
     const half = base.w / 2;
     nx = Math.max(half + 8, Math.min(W - half - 8, nx));
@@ -835,29 +958,110 @@
     }
   }
 
-  canvas.addEventListener('pointerdown', (e) => {
-    if (state !== 'playing' && state !== 'falling') return;
-    canvas.setPointerCapture(e.pointerId);
+  function nudgeBase(px) {
+    if (!stack.length || !canControl()) return;
+    const base = stack[0];
+    moveBase(base.x + base.w / 2 + px);
+  }
+
+  function clearDrag() {
+    dragX = null;
+    dragPointerId = null;
+    dragMode = null;
+  }
+
+  function onCanvasPointerDown(e) {
+    if (!canControl()) return;
+    if (e.target && e.target.closest && e.target.closest('#touchPad, #overlay, button')) return;
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    dragPointerId = e.pointerId;
     dragX = e.clientX;
+    lastPointerX = e.clientX;
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left;
-    if (stack.length) {
-      const base = stack[0];
-      const mid = W / 2;
-      if (Math.abs(cx - (base.x + base.w / 2)) > base.w * 0.6) {
-        moveBase(base.x + base.w / 2 + (cx < mid ? -28 : 28));
-      } else {
-        moveBase(cx);
-      }
+    if (!stack.length) return;
+    const base = stack[0];
+    const baseCx = base.x + base.w / 2;
+    // Large side zones = bigger nudge; center = absolute drag to finger
+    const sideZone = Math.max(72, W * 0.22);
+    if (cx < sideZone) {
+      dragMode = 'rel';
+      nudgeBase(-42);
+    } else if (cx > W - sideZone) {
+      dragMode = 'rel';
+      nudgeBase(42);
+    } else {
+      dragMode = 'abs';
+      // Soft pull toward finger (not instant snap) for easier fine control
+      const blend = 0.55;
+      moveBase(baseCx + (cx - baseCx) * blend);
     }
-  });
-  canvas.addEventListener('pointermove', (e) => {
-    if (dragX == null) return;
+  }
+
+  function onCanvasPointerMove(e) {
+    if (dragX == null || (dragPointerId != null && e.pointerId !== dragPointerId)) return;
+    e.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    moveBase(e.clientX - rect.left);
-  });
-  canvas.addEventListener('pointerup', () => { dragX = null; });
-  canvas.addEventListener('pointercancel', () => { dragX = null; });
+    const cx = e.clientX - rect.left;
+    const dxScreen = e.clientX - lastPointerX;
+    lastPointerX = e.clientX;
+    if (!stack.length) return;
+    const base = stack[0];
+    if (dragMode === 'rel') {
+      // Finger delta → stack move; slightly amplified for fat-finger phones
+      nudgeBase(dxScreen * 1.35);
+    } else {
+      moveBase(cx);
+    }
+    dragX = e.clientX;
+  }
+
+  function onCanvasPointerUp(e) {
+    if (dragPointerId != null && e.pointerId !== dragPointerId) return;
+    clearDrag();
+  }
+
+  canvas.addEventListener('pointerdown', onCanvasPointerDown, { passive: false });
+  canvas.addEventListener('pointermove', onCanvasPointerMove, { passive: false });
+  canvas.addEventListener('pointerup', onCanvasPointerUp);
+  canvas.addEventListener('pointercancel', onCanvasPointerUp);
+  canvas.addEventListener('lostpointercapture', clearDrag);
+
+  // Prevent iOS/Chrome page scroll/zoom while playing
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('touchmove', (e) => {
+    if (state === 'playing' || state === 'falling' || state === 'countdown') e.preventDefault();
+  }, { passive: false });
+
+  function bindPad(btn, dir) {
+    const start = (e) => {
+      if (!canControl()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { btn.setPointerCapture(e.pointerId); } catch (err) {}
+      padHold = dir;
+      btn.classList.add('held');
+      nudgeBase(dir * 36);
+    };
+    const end = () => {
+      padHold = 0;
+      btn.classList.remove('held');
+    };
+    btn.addEventListener('pointerdown', start, { passive: false });
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointercancel', end);
+    btn.addEventListener('lostpointercapture', end);
+  }
+  bindPad(btnLeft, -1);
+  bindPad(btnRight, 1);
+  btnDrop.addEventListener('pointerdown', (e) => {
+    if (!canControl() || !stack.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Nudge stack toward screen center (not alignment guide — just recenter base)
+    moveBase(W / 2);
+  }, { passive: false });
 
   window.addEventListener('keydown', (e) => {
     keys[e.key] = true;
@@ -938,9 +1142,45 @@
     stack = [base];
     attachMesh(base);
     falling = null;
-    state = 'playing';
+    state = 'countdown';
     controlsHint.style.opacity = '0.85';
+    touchPad.classList.add('show');
+  }
+
+  function beginPlayAfterCountdown() {
+    if (state !== 'countdown') return;
+    state = 'playing';
+    lastTickTs = performance.now();
+    timeLeft = ROUND_TIME;
+    updateTimeBar();
     spawnNext();
+  }
+
+  function runCountdown(thenPlay) {
+    if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = null; }
+    const steps = ['3', '2', '1', 'GO!'];
+    let i = 0;
+    countdownEl.classList.add('show');
+    function showStep() {
+      countdownNum.textContent = steps[i];
+      // retrigger animation
+      countdownNum.style.animation = 'none';
+      void countdownNum.offsetWidth;
+      countdownNum.style.animation = '';
+      const delay = steps[i] === 'GO!' ? 420 : 700;
+      i++;
+      if (i < steps.length) {
+        countdownTimer = setTimeout(showStep, delay);
+      } else {
+        countdownTimer = setTimeout(() => {
+          countdownEl.classList.remove('show');
+          countdownNum.textContent = '';
+          countdownTimer = null;
+          if (thenPlay) thenPlay();
+        }, delay);
+      }
+    }
+    showStep();
   }
 
   function spawnNext() {
@@ -1079,6 +1319,11 @@
   function endGame(survived) {
     state = 'result';
     controlsHint.style.opacity = '0';
+    touchPad.classList.remove('show');
+    padHold = 0;
+    clearDrag();
+    if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = null; }
+    countdownEl.classList.remove('show');
     const avgAcc = placed > 0 ? Math.round(accSum / placed) : 0;
     const reason = endReason || (survived ? 'complete' : 'miss');
     const grade = getGrade(score, avgAcc, perfects, placed, survived, reason);
@@ -1313,8 +1558,9 @@
 
     if (state === 'playing' || state === 'falling') {
       let dx = 0;
-      if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 6.5;
-      if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 6.5;
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 5.2;
+      if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 5.2;
+      if (padHold) dx += padHold * 7.5;
       if (dx && stack.length) {
         const base = stack[0];
         moveBase(base.x + base.w / 2 + dx);
@@ -1357,21 +1603,17 @@
     animId = requestAnimationFrame(tick);
   }
 
-  document.getElementById('startBtn').addEventListener('click', () => {
+  function startRound() {
     overlay.classList.add('hidden');
     resultScreen.classList.remove('show');
     startCard.style.display = 'block';
     resize();
     resetGame();
-  });
+    runCountdown(beginPlayAfterCountdown);
+  }
 
-  document.getElementById('retryBtn').addEventListener('click', () => {
-    overlay.classList.add('hidden');
-    resultScreen.classList.remove('show');
-    startCard.style.display = 'block';
-    resize();
-    resetGame();
-  });
+  document.getElementById('startBtn').addEventListener('click', startRound);
+  document.getElementById('retryBtn').addEventListener('click', startRound);
 
   document.getElementById('dlBtn').addEventListener('click', () => {
     const url = resultCanvas.toDataURL('image/png');

@@ -48,7 +48,6 @@
     margin-top: 3px;
     font-weight: 500;
   }
-  /* HUD stays above canvas + overlays so 總分 never covered */
   #hud {
     flex: 0 0 auto;
     display: flex;
@@ -60,7 +59,6 @@
     font-weight: 600;
     background: rgba(255,255,255,0.92);
     backdrop-filter: blur(8px);
-    border-bottom: none;
     z-index: 40;
     position: relative;
   }
@@ -154,7 +152,6 @@
     cursor: grab;
   }
   canvas#game:active { cursor: grabbing; }
-  /* Overlay only covers play area — never banner/HUD/time bar */
   #overlay {
     position: absolute;
     inset: 0;
@@ -260,23 +257,13 @@
     pointer-events: none;
     z-index: 3;
   }
-  #runTag {
-    font-size: 0.65rem;
-    color: #A07858;
-    text-align: center;
-    padding: 0 10px 4px;
-    background: rgba(255,255,255,0.92);
-    z-index: 40;
-    position: relative;
-    min-height: 1em;
-  }
 </style>
 </head>
 <body>
 <div id="wrap">
   <div id="banner">
     <h1>漢堡疊疊樂 🍔</h1>
-    <div class="hook">每局材料隨機 · 靠眼力對齊 · 限時挑戰！</div>
+    <div class="hook">限時疊漢堡 · 靠眼力對齊</div>
   </div>
   <div id="hud">
     <span class="pill score">總分 <span id="scoreEl">0</span></span>
@@ -286,49 +273,52 @@
   <div id="timeBarWrap">
     <div id="timeBarTrack">
       <div id="timeBarFill"></div>
-      <div id="timeLabel"><span id="timeEl">32.0</span> 秒</div>
+      <div id="timeLabel"><span id="timeEl">24.0</span> 秒</div>
     </div>
   </div>
-  <div id="runTag"><span id="runTagEl">準備中…</span></div>
   <div id="canvasBox">
     <canvas id="game"></canvas>
     <div id="floatMsg"></div>
-    <div id="controlsHint">← 拖曳／撳左半或右半／方向鍵移動底盤 →</div>
+    <div id="controlsHint">拖曳／撳左或右／← → 移動底盤</div>
     <div id="overlay">
       <div class="card" id="startCard">
         <h2>準備好未？🍔</h2>
-        <p class="sub">每局材料池都會洗牌，偶爾仲有野味料！用手指或滑鼠左右移動底盤接住跌落材料。冇度位指示，全靠眼力；限時內疊到頂包，主廚頭銜極罕有！</p>
+        <p class="sub">左右移動底盤，接住跌落嘅材料。冇對齊輔助線，限時內疊到頂包。主廚頭銜極罕有。</p>
         <button class="btn btn-primary" id="startBtn">開始疊漢堡</button>
       </div>
       <div id="resultScreen">
-        <canvas id="resultCanvas" width="360" height="720"></canvas>
+        <canvas id="resultCanvas" width="360" height="640"></canvas>
         <div class="result-actions">
           <button class="btn btn-primary" id="dlBtn">下載結果圖</button>
           <button class="btn btn-secondary" id="retryBtn">再試一次</button>
         </div>
-        <p class="hint">💡 每局結果卡都獨一無二——下載後分享去 Threads 挑戰朋友！</p>
+        <p class="hint">下載結果圖後可分享挑戰朋友</p>
       </div>
     </div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <script>
 (function () {
   'use strict';
 
-  // ── Config (tuned harder / faster) ──────────────────────
-  const TOTAL_LAYERS = 10;          // including top bun as last
-  const MISS_THRESHOLD = 0.26;     // stricter: more miss-outs
-  const PERFECT_TOL = 0.022;       // tighter perfect window
-  const BASE_FALL_SPEED = 3.4;     // was 2.2 — much faster
-  const SPEED_INC = 0.38;          // accelerates harder per layer
-  const BASE_WIDTH = 150;
-  const PIECE_H = 28;
-  const BUN_H = 36;
-  const ROUND_TIME = 32;           // was 45 — shorter round
-  const SIDE_DEPTH = 5;
+  if (typeof THREE === 'undefined') {
+    document.body.innerHTML = '<p style="padding:24px;font-family:sans-serif">無法載入 3D 引擎，請檢查網絡後重新整理。</p>';
+    return;
+  }
 
-  // Core topping pool (order shuffled each run; top bun always last)
+  // ── Config (harder) ─────────────────────────────────────
+  const TOTAL_LAYERS = 10;
+  const MISS_THRESHOLD = 0.34;
+  const PERFECT_TOL = 0.015;
+  const BASE_FALL_SPEED = 4.6;
+  const SPEED_INC = 0.52;
+  const BASE_WIDTH = 150;
+  const BUN_H = 36;
+  const ROUND_TIME = 24;
+  const DEPTH = 72;
+
   const CORE_TOPPINGS = [
     { id: 'lettuce', name: '生菜', h: 18 },
     { id: 'tomato',  name: '番茄', h: 22 },
@@ -340,40 +330,18 @@
     { id: 'egg',     name: '煎蛋', h: 22 },
   ];
 
-  // Wild toppings (original art, no trademarks) — occasional
   const WILD_TOPPINGS = [
-    { id: 'avocado',  name: '牛油果', h: 18 },
-    { id: 'mushroom', name: '蘑菇', h: 18 },
-    { id: 'chili',    name: '辣椒', h: 16 },
-    { id: 'pineapple',name: '菠蘿', h: 18 },
-    { id: 'shrimp',   name: '炸蝦', h: 20 },
-    { id: 'corn',     name: '玉米', h: 16 },
-    { id: 'sauce',    name: '秘製醬', h: 14 },
+    { id: 'avocado',   name: '牛油果', h: 18 },
+    { id: 'mushroom',  name: '蘑菇', h: 18 },
+    { id: 'chili',     name: '辣椒', h: 16 },
+    { id: 'pineapple', name: '菠蘿', h: 18 },
+    { id: 'shrimp',    name: '炸蝦', h: 20 },
+    { id: 'corn',      name: '玉米', h: 16 },
+    { id: 'sauce',     name: '秘製醬', h: 14 },
   ];
 
   const TOP_BUN = { id: 'topBun', name: '頂包', h: BUN_H };
 
-  const COMBO_PREFIX = ['午夜', '斜斜', '火爆', '軟糯', '暴走', '神秘', '街坊', '極限', '亂撞', '閃避'];
-  const COMBO_SUFFIX = ['巨無霸', '塔', '炸彈', '俱樂部', '探險隊', '實驗體', '食堂特餐', '疊疊怪', '傳說包', '夜貓餐'];
-
-  const FORTUNE_LINES = [
-    '今日適合挑戰高分，但唔好貪快。',
-    '對齊靠感覺，感覺靠練習。',
-    '主廚之路，九成半人行唔到盡。',
-    '材料隨機，運氣都係技術一部分。',
-    '散枱唔緊要，再嚟過就係本事。',
-    '完美一層，勝過十層歪歪斜斜。',
-    '限時壓力下先見真功夫。',
-    '今日漢堡運：中上，記得下載結果卡。',
-    '野味料出現＝命運嘅玩笑，接住佢。',
-    '分享呢張卡，睇邊個先做到傳說。',
-    '眼快手快，心要定。',
-    '斜斜都得食，但分數就另講。',
-  ];
-
-  const STAMP_EMOJIS = ['🍔','🔥','✨','🎯','🍀','⚡','🌙','💎','🎢','🦞','🌶️','🧀'];
-
-  // Seeded PRNG (mulberry32)
   function mulberry32(a) {
     return function () {
       let t = a += 0x6D2B79F5;
@@ -398,15 +366,12 @@
   }
 
   function buildIngredientQueue(rnd) {
-    // TOTAL_LAYERS falling pieces after bottom bun; last is always top bun
-    const midSlots = TOTAL_LAYERS - 1; // toppings before top bun
-
+    const midSlots = TOTAL_LAYERS - 1;
     const core = CORE_TOPPINGS.map((x) => Object.assign({}, x));
     shuffleInPlace(core, rnd);
     const wild = WILD_TOPPINGS.map((x) => Object.assign({}, x));
     shuffleInPlace(wild, rnd);
 
-    // 1–2 wilds most runs; ~25% chance of 3; rare 0
     let wildN = 1;
     const wr = rnd();
     if (wr < 0.12) wildN = 0;
@@ -423,7 +388,6 @@
       ci++;
     }
     shuffleInPlace(chosen, rnd);
-    // Avoid identical consecutive ids when possible
     for (let i = 1; i < chosen.length; i++) {
       if (chosen[i].id === chosen[i - 1].id) {
         for (let j = i + 1; j < chosen.length; j++) {
@@ -438,47 +402,34 @@
     return chosen;
   }
 
-  function weirdComboName(names, rnd) {
-    const mid = names.filter((n) => n !== '底包' && n !== '頂包');
-    const a = mid.length ? mid[Math.floor(rnd() * mid.length)] : '神秘';
-    const b = mid.length > 1 ? mid[Math.floor(rnd() * mid.length)] : a;
-    const pref = COMBO_PREFIX[Math.floor(rnd() * COMBO_PREFIX.length)];
-    const suf = COMBO_SUFFIX[Math.floor(rnd() * COMBO_SUFFIX.length)];
-    if (rnd() < 0.45) return pref + a + suf;
-    return a + '×' + b + suf;
-  }
-
-  // Grades — elite rare
   function getGrade(score, avgAcc, perfects, layers, survived, reason) {
     if (reason === 'timeout') {
-      if (layers <= 3) return { title: '時間大盜', emoji: '⏰', color: '#E85A8A', tier: 'C' };
-      if (layers <= 6) return { title: '趕住收工包', emoji: '🏃', color: '#C45C26', tier: 'C' };
-      return { title: '差少少就齊', emoji: '😤', color: '#FF6B9D', tier: 'B' };
+      if (layers <= 3) return { title: '時間到', emoji: '⏰', color: '#E85A8A' };
+      if (layers <= 6) return { title: '差少少', emoji: '🏃', color: '#C45C26' };
+      return { title: '接近完成', emoji: '😤', color: '#FF6B9D' };
     }
     if (!survived) {
-      if (layers <= 2) return { title: '散枱新手', emoji: '😅', color: '#A07858', tier: 'D' };
-      if (layers <= 5) return { title: '半途而廢包', emoji: '🫠', color: '#C45C26', tier: 'C' };
-      return { title: '差少少完美', emoji: '😤', color: '#E85A8A', tier: 'B' };
+      if (layers <= 2) return { title: '散枱', emoji: '😅', color: '#A07858' };
+      if (layers <= 5) return { title: '半途出局', emoji: '🫠', color: '#C45C26' };
+      return { title: '差少少完美', emoji: '😤', color: '#E85A8A' };
     }
-    // Completed — strict elite
-    if (avgAcc >= 97 && perfects >= 7 && score >= 1400) {
-      return { title: '傳說廚神', emoji: '👑', color: '#D4A017', tier: 'S' };
+    if (avgAcc >= 98 && perfects >= 8 && score >= 1550) {
+      return { title: '傳說廚神', emoji: '👑', color: '#D4A017' };
     }
-    if (avgAcc >= 94 && perfects >= 5 && score >= 1100) {
-      return { title: '米芝蓮主廚', emoji: '👨‍🍳', color: '#C9A227', tier: 'A+' };
+    if (avgAcc >= 95 && perfects >= 6 && score >= 1250) {
+      return { title: '米芝蓮主廚', emoji: '👨‍🍳', color: '#C9A227' };
     }
-    if (avgAcc >= 90 && perfects >= 3) {
-      return { title: '漢堡藝術家', emoji: '🎨', color: '#FF6B9D', tier: 'A' };
+    if (avgAcc >= 91 && perfects >= 4 && score >= 900) {
+      return { title: '漢堡高手', emoji: '🍔', color: '#FF6B9D' };
     }
-    if (avgAcc >= 82) return { title: '穩陣大廚', emoji: '😎', color: '#C45C26', tier: 'B' };
-    if (avgAcc >= 72) return { title: '街坊食店級', emoji: '🏪', color: '#8B6B4A', tier: 'C' };
-    if (avgAcc >= 58) return { title: '深夜食堂學徒', emoji: '🌙', color: '#A07858', tier: 'C' };
-    return { title: '斜斜都得食', emoji: '🤪', color: '#A07858', tier: 'D' };
+    if (avgAcc >= 84) return { title: '穩陣大廚', emoji: '😎', color: '#C45C26' };
+    if (avgAcc >= 74) return { title: '合格廚師', emoji: '👍', color: '#8B6B4A' };
+    if (avgAcc >= 60) return { title: '學徒', emoji: '📝', color: '#A07858' };
+    return { title: '再試多次', emoji: '💪', color: '#A07858' };
   }
 
   // ── DOM ─────────────────────────────────────────────────
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
   const overlay = document.getElementById('overlay');
   const startCard = document.getElementById('startCard');
   const resultScreen = document.getElementById('resultScreen');
@@ -491,12 +442,314 @@
   const controlsHint = document.getElementById('controlsHint');
   const timeEl = document.getElementById('timeEl');
   const timeBarFill = document.getElementById('timeBarFill');
-  const runTagEl = document.getElementById('runTagEl');
 
   totalLayersEl.textContent = TOTAL_LAYERS;
 
+  // ── Three.js scene ──────────────────────────────────────
+  let W = 320, H = 480, dpr = 1;
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xFFF5EB);
+  scene.fog = new THREE.Fog(0xFFF5EB, 520, 980);
+
+  const camera = new THREE.PerspectiveCamera(38, W / H, 10, 2000);
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    antialias: true,
+    alpha: false,
+    powerPreference: 'high-performance',
+  });
+  renderer.setClearColor(0xFFF5EB, 1);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  if (renderer.outputEncoding !== undefined) {
+    renderer.outputEncoding = THREE.sRGBEncoding;
+  }
+
+  const amb = new THREE.AmbientLight(0xfff0e0, 0.62);
+  scene.add(amb);
+  const hemi = new THREE.HemisphereLight(0xfff8f0, 0xd4a574, 0.35);
+  scene.add(hemi);
+
+  const dir = new THREE.DirectionalLight(0xffffff, 0.78);
+  dir.position.set(90, 280, 160);
+  dir.castShadow = true;
+  dir.shadow.mapSize.width = 1024;
+  dir.shadow.mapSize.height = 1024;
+  dir.shadow.camera.near = 20;
+  dir.shadow.camera.far = 700;
+  dir.shadow.camera.left = -220;
+  dir.shadow.camera.right = 220;
+  dir.shadow.camera.top = 220;
+  dir.shadow.camera.bottom = -220;
+  dir.shadow.bias = -0.0008;
+  dir.shadow.radius = 3.5;
+  scene.add(dir);
+
+  const fill = new THREE.DirectionalLight(0xffd0b0, 0.28);
+  fill.position.set(-120, 120, -40);
+  scene.add(fill);
+
+  const tableGroup = new THREE.Group();
+  scene.add(tableGroup);
+
+  const plateGeo = new THREE.CylinderGeometry(118, 122, 8, 48);
+  const plateMat = new THREE.MeshStandardMaterial({
+    color: 0xFFFAF5,
+    roughness: 0.45,
+    metalness: 0.05,
+  });
+  const plate = new THREE.Mesh(plateGeo, plateMat);
+  plate.receiveShadow = true;
+  plate.castShadow = true;
+  plate.position.y = -4;
+  tableGroup.add(plate);
+
+  const tableTop = new THREE.Mesh(
+    new THREE.BoxGeometry(420, 12, 220),
+    new THREE.MeshStandardMaterial({ color: 0xE8C9A0, roughness: 0.85 })
+  );
+  tableTop.position.y = -14;
+  tableTop.receiveShadow = true;
+  tableGroup.add(tableTop);
+
+  const pieceRoot = new THREE.Group();
+  scene.add(pieceRoot);
+
+  const particleRoot = new THREE.Group();
+  scene.add(particleRoot);
+
+  // ── Materials / mesh factory ────────────────────────────
+  function mat(color, opts) {
+    opts = opts || {};
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      roughness: opts.roughness != null ? opts.roughness : 0.55,
+      metalness: opts.metalness != null ? opts.metalness : 0.05,
+      flatShading: !!opts.flat,
+      transparent: !!opts.transparent,
+      opacity: opts.opacity != null ? opts.opacity : 1,
+    });
+  }
+
+  function addSesame(group, radius, y) {
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + (i % 2) * 0.2;
+      const r = radius * (0.25 + (i % 3) * 0.18);
+      const seed = new THREE.Mesh(
+        new THREE.SphereGeometry(2.2, 6, 6),
+        mat(0xF5E6C8, { roughness: 0.7 })
+      );
+      seed.position.set(Math.cos(a) * r, y, Math.sin(a) * r * 0.55);
+      seed.scale.set(1, 0.55, 1.4);
+      seed.castShadow = true;
+      group.add(seed);
+    }
+  }
+
+  function createPieceMesh(id, w, h) {
+    const g = new THREE.Group();
+    const R = Math.max(10, w / 2);
+    const depth = Math.min(DEPTH, Math.max(36, w * 0.42));
+    const ry = depth / 2;
+
+    function cyl(rt, rb, hh, segs, material, y) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, hh, segs || 28), material);
+      m.position.y = y != null ? y : 0;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      g.add(m);
+      return m;
+    }
+
+    if (id === 'bottomBun') {
+      cyl(R * 0.98, R, h * 0.72, 32, mat(0xE09440, { roughness: 0.7 }), -h * 0.05);
+      cyl(R * 0.92, R * 0.96, h * 0.28, 32, mat(0xF2BC6A, { roughness: 0.55 }), h * 0.28);
+    } else if (id === 'topBun') {
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(R * 0.98, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.52),
+        mat(0xE8A04A, { roughness: 0.55 })
+      );
+      dome.position.y = -h * 0.05;
+      dome.scale.set(1, (h * 1.15) / R, depth / (R * 2));
+      dome.castShadow = true;
+      dome.receiveShadow = true;
+      g.add(dome);
+      cyl(R * 0.95, R, h * 0.22, 32, mat(0xD4893A, { roughness: 0.65 }), -h * 0.32);
+      addSesame(g, R * 0.75, h * 0.22);
+    } else if (id === 'lettuce' || id === 'lettuce2') {
+      const leaf = mat(0x7CB342, { roughness: 0.8, flat: true });
+      for (let i = 0; i < 5; i++) {
+        const leafM = new THREE.Mesh(
+          new THREE.TorusGeometry(R * (0.55 + i * 0.08), h * 0.28, 6, 18),
+          leaf
+        );
+        leafM.rotation.x = Math.PI / 2;
+        leafM.rotation.z = i * 0.35;
+        leafM.position.y = (i - 2) * 1.2;
+        leafM.scale.set(1, depth / (R * 1.6), 1);
+        leafM.castShadow = true;
+        g.add(leafM);
+      }
+    } else if (id === 'tomato') {
+      cyl(R, R, h * 0.85, 28, mat(0xE53935, { roughness: 0.4 }), 0);
+      cyl(R * 0.55, R * 0.55, h * 0.2, 12, mat(0xFFEB3B, { roughness: 0.5 }), 0);
+    } else if (id === 'cheese') {
+      const cheese = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 1.12, h * 0.7, depth * 1.05),
+        mat(0xFFC107, { roughness: 0.45 })
+      );
+      cheese.castShadow = true;
+      cheese.receiveShadow = true;
+      g.add(cheese);
+      const drip = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 0.25, h * 0.9, depth * 0.2),
+        mat(0xFFB300, { roughness: 0.45 })
+      );
+      drip.position.set(w * 0.35, -h * 0.35, depth * 0.2);
+      drip.castShadow = true;
+      g.add(drip);
+    } else if (id === 'patty') {
+      cyl(R, R * 0.98, h * 0.9, 24, mat(0x5D4037, { roughness: 0.9, flat: true }), 0);
+      const grill = mat(0x3E2723, { roughness: 1 });
+      for (let i = -1; i <= 1; i++) {
+        const bar = new THREE.Mesh(new THREE.BoxGeometry(w * 0.85, 1.5, depth * 0.15), grill);
+        bar.position.set(0, i * (h * 0.22), ry * 0.55);
+        g.add(bar);
+      }
+    } else if (id === 'onion') {
+      cyl(R, R, h * 0.75, 28, mat(0xF8BBD0, { roughness: 0.5 }), 0);
+      for (let i = 0; i < 2; i++) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(R * (0.45 + i * 0.2), 1.2, 6, 24),
+          mat(0xF48FB1, { roughness: 0.5 })
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = (i - 0.5) * 2;
+        ring.scale.z = depth / (R * 2);
+        g.add(ring);
+      }
+    } else if (id === 'pickle') {
+      cyl(R * 0.95, R * 0.95, h * 0.7, 16, mat(0x689F38, { roughness: 0.65 }), 0);
+      for (let i = 0; i < 6; i++) {
+        const bump = new THREE.Mesh(new THREE.SphereGeometry(2.5, 6, 6), mat(0x9CCC65));
+        const a = (i / 6) * Math.PI * 2;
+        bump.position.set(Math.cos(a) * R * 0.55, 0, Math.sin(a) * ry * 0.5);
+        g.add(bump);
+      }
+    } else if (id === 'bacon') {
+      for (let i = 0; i < 3; i++) {
+        const strip = new THREE.Mesh(
+          new THREE.BoxGeometry(w * 0.95, h * 0.22, depth * 0.7),
+          mat(i % 2 ? 0xC62828 : 0xFFCC80, { roughness: 0.6 })
+        );
+        strip.position.y = (i - 1) * (h * 0.28);
+        strip.rotation.z = (i - 1) * 0.04;
+        strip.castShadow = true;
+        g.add(strip);
+      }
+    } else if (id === 'egg') {
+      const white = new THREE.Mesh(
+        new THREE.SphereGeometry(R * 0.95, 24, 16),
+        mat(0xFFFAF0, { roughness: 0.4 })
+      );
+      white.scale.set(1, h / (R * 1.6), depth / (R * 2));
+      white.castShadow = true;
+      white.receiveShadow = true;
+      g.add(white);
+      const yolk = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.min(R * 0.38, 18), 16, 16),
+        mat(0xFFC107, { roughness: 0.35 })
+      );
+      yolk.scale.set(1, 0.55, 1);
+      yolk.position.y = h * 0.12;
+      yolk.castShadow = true;
+      g.add(yolk);
+    } else if (id === 'avocado') {
+      cyl(R, R, h * 0.75, 28, mat(0x8BC34A, { roughness: 0.55 }), 0);
+      const pit = new THREE.Mesh(new THREE.SphereGeometry(R * 0.22, 12, 12), mat(0xF9A825));
+      pit.scale.y = 0.5;
+      g.add(pit);
+    } else if (id === 'mushroom') {
+      cyl(R * 0.9, R * 0.9, h * 0.7, 20, mat(0xBCAAA4, { roughness: 0.7 }), 0);
+      for (let i = 0; i < 4; i++) {
+        const spot = new THREE.Mesh(new THREE.SphereGeometry(3, 6, 6), mat(0x795548, { roughness: 0.8 }));
+        const a = (i / 4) * Math.PI * 2;
+        spot.position.set(Math.cos(a) * R * 0.4, h * 0.15, Math.sin(a) * ry * 0.35);
+        g.add(spot);
+      }
+    } else if (id === 'chili') {
+      const chiliGeo = typeof THREE.CapsuleGeometry === 'function'
+        ? new THREE.CapsuleGeometry(R * 0.35, w * 0.55, 6, 12)
+        : new THREE.CylinderGeometry(R * 0.35, R * 0.28, w * 0.7, 12);
+      const body = new THREE.Mesh(
+        chiliGeo,
+        mat(0xD32F2F, { roughness: 0.45 })
+      );
+      body.rotation.z = Math.PI / 2;
+      body.castShadow = true;
+      g.add(body);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.5, 8, 6), mat(0x2E7D32));
+      stem.position.set(-w * 0.32, h * 0.2, 0);
+      g.add(stem);
+    } else if (id === 'pineapple') {
+      cyl(R, R, h * 0.75, 16, mat(0xFFB300, { roughness: 0.55, flat: true }), 0);
+      for (let i = 0; i < 4; i++) {
+        const line = new THREE.Mesh(
+          new THREE.BoxGeometry(w * 0.85, 1.2, depth * 0.1),
+          mat(0xFF8F00)
+        );
+        line.position.set(0, (i - 1.5) * 3, ry * 0.5);
+        g.add(line);
+      }
+    } else if (id === 'shrimp') {
+      const body = new THREE.Mesh(
+        new THREE.TorusGeometry(R * 0.55, h * 0.35, 8, 16, Math.PI * 1.2),
+        mat(0xFF7043, { roughness: 0.5 })
+      );
+      body.rotation.y = Math.PI / 2;
+      body.castShadow = true;
+      g.add(body);
+    } else if (id === 'corn') {
+      cyl(R * 0.95, R * 0.95, h * 0.7, 16, mat(0xFFD54F, { roughness: 0.55 }), 0);
+      for (let row = 0; row < 2; row++) {
+        for (let i = 0; i < 6; i++) {
+          const kernel = new THREE.Mesh(new THREE.SphereGeometry(2.8, 6, 6), mat(0xFFC107));
+          kernel.position.set(
+            -R * 0.6 + i * (R * 0.24),
+            (row - 0.5) * 4,
+            ry * 0.45
+          );
+          g.add(kernel);
+        }
+      }
+    } else if (id === 'sauce') {
+      const sauce = new THREE.Mesh(
+        new THREE.SphereGeometry(R * 0.9, 16, 12),
+        mat(0xE64A19, { roughness: 0.35 })
+      );
+      sauce.scale.set(1.05, h / (R * 1.8), depth / (R * 2));
+      sauce.position.y = -h * 0.1;
+      sauce.castShadow = true;
+      g.add(sauce);
+    } else {
+      cyl(R, R, h * 0.8, 20, mat(0xA1887F, { roughness: 0.7 }), 0);
+    }
+
+    // Flatten into burger-layer depth (Z) for consistent stack look
+    g.userData.baseScaleZ = depth / Math.max(DEPTH, 1);
+    return g;
+  }
+
+  function syncMesh(piece) {
+    if (!piece.mesh) return;
+    const cx = piece.x + piece.w / 2;
+    const worldY = tableYWorld + (tableY - piece.y - piece.h / 2);
+    piece.mesh.position.set(cx - W / 2, worldY, 0);
+    const s = piece.w / BASE_WIDTH;
+    piece.mesh.scale.set(s, 1, Math.max(0.55, s * 0.95));
+  }
+
   // ── State ───────────────────────────────────────────────
-  let W, H, dpr;
   let state = 'start';
   let stack = [];
   let falling = null;
@@ -512,51 +765,64 @@
   let animId = null;
   let fallSpeed = BASE_FALL_SPEED;
   let tableY = 0;
+  let tableYWorld = 4;
   let shake = 0;
   let particles = [];
   let timeLeft = ROUND_TIME;
   let lastTickTs = 0;
   let endReason = null;
-
   let runId = '';
   let runSeed = 0;
   let rnd = Math.random;
   let ingredients = [];
-  let comboName = '';
-  let fortuneLine = '';
-  let stampEmoji = '🍔';
-  let runStartedAt = null;
 
-  // ── Resize ──────────────────────────────────────────────
+  function updateCamera() {
+    camera.aspect = W / Math.max(1, H);
+    camera.fov = 38;
+    camera.position.set(0, H * 0.28, Math.max(380, H * 0.72));
+    camera.lookAt(0, H * 0.22, 0);
+    camera.updateProjectionMatrix();
+
+    dir.shadow.camera.left = -W * 0.55;
+    dir.shadow.camera.right = W * 0.55;
+    dir.shadow.camera.top = H * 0.55;
+    dir.shadow.camera.bottom = -H * 0.2;
+    dir.shadow.camera.updateProjectionMatrix();
+    dir.position.set(W * 0.25, H * 0.7, 180);
+  }
+
   function resize() {
     const box = document.getElementById('canvasBox');
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = box.clientWidth;
     H = box.clientHeight;
-    canvas.width = Math.floor(W * dpr);
-    canvas.height = Math.floor(H * dpr);
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    tableY = H - 48;
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(W, H, false);
+    tableY = H - 56;
+    tableGroup.position.set(0, tableYWorld - 4, 0);
+    updateCamera();
     if (stack.length) {
       let y = tableY;
       for (let i = 0; i < stack.length; i++) {
         stack[i].y = y - stack[i].h;
         y = stack[i].y;
+        syncMesh(stack[i]);
       }
     }
+    if (falling) syncMesh(falling);
   }
   window.addEventListener('resize', resize);
 
-  // ── Input ───────────────────────────────────────────────
   function moveBase(nx) {
     if (!stack.length || state === 'over' || state === 'result' || state === 'start') return;
     const base = stack[0];
     const half = base.w / 2;
     nx = Math.max(half + 8, Math.min(W - half - 8, nx));
     const dx = nx - (base.x + half);
-    for (const p of stack) p.x += dx;
+    for (const p of stack) {
+      p.x += dx;
+      syncMesh(p);
+    }
   }
 
   canvas.addEventListener('pointerdown', (e) => {
@@ -611,33 +877,56 @@
     }
   }
 
+  function clearPieces() {
+    while (pieceRoot.children.length) {
+      const ch = pieceRoot.children[0];
+      pieceRoot.remove(ch);
+      ch.traverse(function (obj) {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach(function (m) { m.dispose(); });
+          else obj.material.dispose();
+        }
+      });
+    }
+    while (particleRoot.children.length) {
+      particleRoot.remove(particleRoot.children[0]);
+    }
+    particles = [];
+  }
+
+  function attachMesh(piece) {
+    const mesh = createPieceMesh(piece.id, piece.w, piece.h);
+    piece.mesh = mesh;
+    pieceRoot.add(mesh);
+    syncMesh(piece);
+  }
+
   function resetGame() {
+    clearPieces();
     score = 0; lastAcc = null; perfects = 0; accSum = 0; placed = 0;
-    nextIdx = 0; fallSpeed = BASE_FALL_SPEED; particles = []; shake = 0;
+    nextIdx = 0; fallSpeed = BASE_FALL_SPEED; shake = 0;
     timeLeft = ROUND_TIME; endReason = null; lastTickTs = performance.now();
 
     runId = makeRunId();
     runSeed = (Date.now() ^ (Math.floor(Math.random() * 0x7fffffff))) >>> 0;
     rnd = mulberry32(runSeed || 1);
     ingredients = buildIngredientQueue(rnd);
-    stampEmoji = STAMP_EMOJIS[Math.floor(rnd() * STAMP_EMOJIS.length)];
-    fortuneLine = FORTUNE_LINES[Math.floor(rnd() * FORTUNE_LINES.length)];
-    comboName = weirdComboName(ingredients.map((x) => x.name), rnd);
-    runStartedAt = new Date();
 
-    runTagEl.textContent = '本局 ' + runId + ' · seed ' + runSeed.toString(16).toUpperCase() + ' · ' + stampEmoji;
     updateHUD();
     updateTimeBar();
 
     const bw = BASE_WIDTH;
-    stack = [{
+    const base = {
       x: (W - bw) / 2,
       y: tableY - BUN_H,
       w: bw,
       h: BUN_H,
       id: 'bottomBun',
       name: '底包',
-    }];
+    };
+    stack = [base];
+    attachMesh(base);
     falling = null;
     state = 'playing';
     controlsHint.style.opacity = '0.85';
@@ -662,6 +951,7 @@
       name: ing.name,
       vy: fallSpeed,
     };
+    attachMesh(falling);
     state = 'falling';
     nextIdx++;
     layerEl.textContent = Math.min(nextIdx, TOTAL_LAYERS);
@@ -693,9 +983,12 @@
     if (ratio < MISS_THRESHOLD) {
       lastAcc = accPct;
       accEl.textContent = accPct + '%';
-      showFloat('散枱！💥', '#E85A8A');
+      showFloat('散枱！', '#E85A8A');
       spawnMissParticles(f);
       shake = 12;
+      if (f.mesh) {
+        pieceRoot.remove(f.mesh);
+      }
       falling = null;
       state = 'over';
       endReason = 'miss';
@@ -707,29 +1000,27 @@
     const newX = left;
     const newY = top.y - f.h;
 
-    // Stricter scoring curve
-    let pts = Math.round(ratio * 85);
+    let pts = Math.round(ratio * 68);
     let label = '好！';
     let color = '#C45C26';
-    if (centerRatio <= PERFECT_TOL && ratio >= 0.97) {
-      pts = Math.round(pts * 1.55) + 25;
+    if (centerRatio <= PERFECT_TOL && ratio >= 0.98) {
+      pts = Math.round(pts * 1.4) + 18;
       perfects++;
-      label = '完美！✨';
+      label = '完美！';
       color = '#FF6B9D';
       spawnPerfectParticles(fCx, newY);
-    } else if (ratio >= 0.88) {
-      pts = Math.round(pts * 1.12);
+    } else if (ratio >= 0.90) {
+      pts = Math.round(pts * 1.08);
       label = '差唔多！';
       color = '#FF8A5B';
     } else if (ratio < 0.55) {
-      pts = Math.round(pts * 0.85);
+      pts = Math.round(pts * 0.75);
       label = '驚險…';
       color = '#A07858';
     }
 
-    pts += Math.floor(nextIdx * 3);
-    // Small time bonus for remaining time (elite chase)
-    pts += Math.floor(Math.max(0, timeLeft) * 0.15);
+    pts += Math.floor(nextIdx * 2);
+    pts += Math.floor(Math.max(0, timeLeft) * 0.08);
 
     score += pts;
     lastAcc = accPct;
@@ -738,19 +1029,21 @@
     updateHUD();
     showFloat(label + ' +' + pts, color);
 
-    stack.push({
+    if (f.mesh) {
+      pieceRoot.remove(f.mesh);
+      f.mesh = null;
+    }
+
+    const landed = {
       x: newX,
       y: newY,
       w: newW,
       h: f.h,
       id: f.id,
       name: f.name,
-    });
-
-    // Refresh combo name from actual toppings used
-    comboName = weirdComboName(stack.map((p) => p.name).concat(
-      ingredients.slice(nextIdx).map((x) => x.name)
-    ), rnd);
+    };
+    stack.push(landed);
+    attachMesh(landed);
 
     falling = null;
     fallSpeed = BASE_FALL_SPEED + SPEED_INC * nextIdx;
@@ -759,10 +1052,13 @@
     const topY = stack[stack.length - 1].y;
     if (topY < 80) {
       const shift = 80 - topY;
-      for (const p of stack) p.y += shift;
+      for (const p of stack) {
+        p.y += shift;
+        syncMesh(p);
+      }
     }
 
-    setTimeout(spawnNext, 300);
+    setTimeout(spawnNext, 280);
   }
 
   function updateHUD() {
@@ -773,8 +1069,6 @@
   function endGame(survived) {
     state = 'result';
     controlsHint.style.opacity = '0';
-    // Final combo from stacked pieces only
-    comboName = weirdComboName(stack.map((p) => p.name), rnd);
     const avgAcc = placed > 0 ? Math.round(accSum / placed) : 0;
     const reason = endReason || (survived ? 'complete' : 'miss');
     const grade = getGrade(score, avgAcc, perfects, placed, survived, reason);
@@ -785,27 +1079,38 @@
   }
 
   function spawnPerfectParticles(x, y) {
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 12; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(2.5 + Math.random() * 2, 6, 6),
+        mat([0xFF6B9D, 0xFFD700, 0xFF8A5B, 0xffffff][i % 4])
+      );
+      const worldY = tableYWorld + (tableY - y);
+      mesh.position.set(x - W / 2, worldY, 0);
+      particleRoot.add(mesh);
       particles.push({
-        x, y: y + 10,
+        mesh,
         vx: (Math.random() - 0.5) * 6,
-        vy: -Math.random() * 5 - 2,
+        vy: Math.random() * 5 + 2,
+        vz: (Math.random() - 0.5) * 4,
         life: 40 + Math.random() * 20,
-        color: ['#FF6B9D', '#FFD700', '#FF8A5B', '#fff'][i % 4],
-        r: 3 + Math.random() * 3,
       });
     }
   }
+
   function spawnMissParticles(f) {
     for (let i = 0; i < 10; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(2 + Math.random() * 2, 6, 6),
+        mat(0x8B6B4A)
+      );
+      mesh.position.set(f.x + f.w / 2 - W / 2, tableYWorld + (tableY - f.y - f.h / 2), 0);
+      particleRoot.add(mesh);
       particles.push({
-        x: f.x + f.w / 2,
-        y: f.y + f.h / 2,
+        mesh,
         vx: (Math.random() - 0.5) * 8,
-        vy: Math.random() * 4 + 1,
+        vy: Math.random() * 3 + 1,
+        vz: (Math.random() - 0.5) * 5,
         life: 35,
-        color: '#8B6B4A',
-        r: 2 + Math.random() * 3,
       });
     }
   }
@@ -821,560 +1126,65 @@
     c.closePath();
   }
 
-  function softShadow(c, cx, yBottom, w, alpha) {
+  // 2D mini stack for share card (simple dimensional slabs)
+  function drawIngredientOn(c, p) {
     c.save();
-    c.globalAlpha = alpha == null ? 0.18 : alpha;
-    const g = c.createRadialGradient(cx, yBottom + 2, 1, cx, yBottom + 2, w * 0.5);
-    g.addColorStop(0, 'rgba(60,30,10,0.55)');
-    g.addColorStop(1, 'rgba(60,30,10,0)');
-    c.fillStyle = g;
-    c.beginPath();
-    c.ellipse(cx, yBottom + 3, w * 0.48, 5, 0, 0, Math.PI * 2);
-    c.fill();
-    c.restore();
-  }
+    const { x, y, w, h, id } = p;
+    const cx = x + w / 2;
+    const d = Math.min(5, Math.max(3, h * 0.28));
 
-  function sideBand(c, x, y, w, h, depth, color) {
-    c.fillStyle = color;
+    c.fillStyle = 'rgba(60,30,10,0.18)';
+    c.beginPath();
+    c.ellipse(cx, y + h + 3, w * 0.48, 4, 0, 0, Math.PI * 2);
+    c.fill();
+
+    const colors = {
+      bottomBun: ['#F2BC6A', '#C87830'],
+      topBun: ['#F5C878', '#D4893A'],
+      lettuce: ['#9CCC65', '#558B2F'],
+      tomato: ['#EF5350', '#C62828'],
+      cheese: ['#FFE082', '#FFB300'],
+      patty: ['#8D6E63', '#4E342E'],
+      onion: ['#FCE4EC', '#F8BBD0'],
+      pickle: ['#9CCC65', '#558B2F'],
+      bacon: ['#E57373', '#C62828'],
+      egg: ['#FFFAF0', '#F0E6C8'],
+      avocado: ['#AED581', '#7CB342'],
+      mushroom: ['#EFEBE9', '#BCAAA4'],
+      chili: ['#FF7043', '#D32F2F'],
+      pineapple: ['#FFE082', '#FFB300'],
+      shrimp: ['#FFAB91', '#FF7043'],
+      corn: ['#FFF59D', '#FFD54F'],
+      sauce: ['#FF8A65', '#E64A19'],
+    };
+    const col = colors[id] || ['#A1887F', '#6D4C41'];
+
+    c.fillStyle = col[1];
     c.beginPath();
     c.moveTo(x, y + h);
     c.lineTo(x + w, y + h);
-    c.lineTo(x + w - 2, y + h + depth);
-    c.lineTo(x + 2, y + h + depth);
+    c.lineTo(x + w - 2, y + h + d);
+    c.lineTo(x + 2, y + h + d);
     c.closePath();
     c.fill();
-  }
 
-  function topHighlight(c, x, y, w, h, rx) {
-    c.save();
-    c.globalAlpha = 0.35;
-    const g = c.createLinearGradient(x, y, x, y + h * 0.55);
-    g.addColorStop(0, 'rgba(255,255,255,0.7)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
+    const g = c.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, col[0]);
+    g.addColorStop(1, col[1]);
     c.fillStyle = g;
-    roundRect(c, x + 3, y + 2, w - 6, Math.max(4, h * 0.4), rx || 6);
-    c.fill();
-    c.restore();
-  }
-
-  function drawIngredient(p, alpha) {
-    drawIngredientOn(ctx, p, alpha);
-  }
-
-  function drawIngredientOn(c, p, alpha) {
-    c.save();
-    if (alpha != null) c.globalAlpha = alpha;
-    const { x, y, w, h, id } = p;
-    const cx = x + w / 2;
-    const d = Math.min(SIDE_DEPTH, Math.max(3, h * 0.28));
-
-    softShadow(c, cx, y + h, w, 0.16);
-
-    if (id === 'bottomBun' || id === 'topBun') {
-      const isTop = id === 'topBun';
-      if (isTop) {
-        c.fillStyle = '#C87830';
-        c.beginPath();
-        c.ellipse(cx, y + h - 2, w / 2, 6, 0, 0, Math.PI * 2);
-        c.fill();
-        const bunG = c.createLinearGradient(x, y, x, y + h);
-        bunG.addColorStop(0, '#F5C878');
-        bunG.addColorStop(0.45, '#E8A04A');
-        bunG.addColorStop(1, '#D4893A');
-        c.fillStyle = bunG;
-        c.beginPath();
-        c.ellipse(cx, y + h * 0.58, w / 2, h * 0.58, 0, Math.PI, 0);
-        c.lineTo(x + w, y + h - 2);
-        c.ellipse(cx, y + h - 2, w / 2, 5, 0, 0, Math.PI);
-        c.closePath();
-        c.fill();
-        c.fillStyle = 'rgba(255,245,210,0.5)';
-        c.beginPath();
-        c.ellipse(cx - w * 0.12, y + h * 0.32, w * 0.26, h * 0.2, -0.35, 0, Math.PI * 2);
-        c.fill();
-        for (let i = 0; i < 8; i++) {
-          const sx = x + w * (0.16 + (i % 4) * 0.2) + (i > 3 ? w * 0.08 : 0);
-          const sy = y + h * (0.22 + Math.floor(i / 4) * 0.2);
-          c.fillStyle = 'rgba(180,120,60,0.25)';
-          c.beginPath();
-          c.ellipse(sx + 0.5, sy + 0.8, 3.2, 2.1, 0.4, 0, Math.PI * 2);
-          c.fill();
-          c.fillStyle = '#F8ECD4';
-          c.beginPath();
-          c.ellipse(sx, sy, 3, 1.9, 0.4, 0, Math.PI * 2);
-          c.fill();
-        }
-      } else {
-        sideBand(c, x, y, w, h, d, '#B86A28');
-        const bunG = c.createLinearGradient(x, y, x, y + h);
-        bunG.addColorStop(0, '#F2BC6A');
-        bunG.addColorStop(0.55, '#E09440');
-        bunG.addColorStop(1, '#C87830');
-        c.fillStyle = bunG;
-        roundRect(c, x, y, w, h, 12);
-        c.fill();
-        c.fillStyle = '#F5C878';
-        c.beginPath();
-        c.ellipse(cx, y + 5, w * 0.48, 7, 0, 0, Math.PI * 2);
-        c.fill();
-        topHighlight(c, x, y, w, h, 10);
-        c.strokeStyle = 'rgba(180,100,40,0.25)';
-        c.lineWidth = 1.5;
-        c.beginPath();
-        c.ellipse(cx, y + h - 4, w * 0.46, 4, 0, 0, Math.PI);
-        c.stroke();
-      }
-    } else if (id === 'lettuce' || id === 'lettuce2') {
-      sideBand(c, x - 2, y, w + 4, h, d - 1, '#558B2F');
-      const lg = c.createLinearGradient(x, y, x, y + h);
-      lg.addColorStop(0, '#9CCC65');
-      lg.addColorStop(1, '#689F38');
-      c.fillStyle = lg;
+    if (id === 'topBun') {
       c.beginPath();
-      const waves = 6;
-      c.moveTo(x, y + h * 0.45);
-      for (let i = 0; i <= waves; i++) {
-        const px = x + (w / waves) * i;
-        const py = y + (i % 2 === 0 ? 1 : h - 1);
-        c.quadraticCurveTo(px - w / waves / 2, (i % 2 === 0 ? h * 0.2 : h * 0.8) + y, px, py);
-      }
-      for (let i = waves; i >= 0; i--) {
-        const px = x + (w / waves) * i;
-        const py = y + h * 0.55 + (i % 2 === 0 ? 3 : -3);
-        c.lineTo(px, py);
-      }
+      c.ellipse(cx, y + h * 0.55, w / 2, h * 0.55, 0, Math.PI, 0);
+      c.lineTo(x + w, y + h);
+      c.lineTo(x, y + h);
       c.closePath();
-      c.fill();
-      c.fillStyle = 'rgba(200,240,140,0.45)';
-      c.beginPath();
-      c.moveTo(x + 6, y + h * 0.4);
-      for (let i = 0; i <= 4; i++) {
-        c.lineTo(x + 6 + ((w - 12) / 4) * i, y + (i % 2 ? 5 : h - 7));
-      }
-      c.lineTo(x + w - 6, y + h * 0.5);
-      c.closePath();
-      c.fill();
-    } else if (id === 'tomato') {
-      sideBand(c, x, y, w, h, d, '#B71C1C');
-      const tg = c.createLinearGradient(x, y, x, y + h);
-      tg.addColorStop(0, '#EF5350');
-      tg.addColorStop(0.5, '#E53935');
-      tg.addColorStop(1, '#C62828');
-      c.fillStyle = tg;
-      roundRect(c, x, y, w, h, h / 2);
-      c.fill();
-      c.fillStyle = 'rgba(255,200,200,0.4)';
-      c.beginPath();
-      c.ellipse(cx, y + h * 0.32, w * 0.38, h * 0.22, 0, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = 'rgba(255,220,160,0.55)';
-      for (let i = 0; i < 5; i++) {
-        c.beginPath();
-        c.ellipse(x + w * (0.15 + i * 0.175), y + h * 0.58, 2.8, 1.8, 0.2, 0, Math.PI * 2);
-        c.fill();
-      }
-    } else if (id === 'cheese') {
-      c.fillStyle = '#E6A800';
-      c.beginPath();
-      c.moveTo(x - 5, y + 2);
-      c.lineTo(x + w + 5, y + 2);
-      c.lineTo(x + w + 2, y + h + d);
-      c.lineTo(x - 2, y + h + d);
-      c.closePath();
-      c.fill();
-      const cg = c.createLinearGradient(x, y, x, y + h);
-      cg.addColorStop(0, '#FFE082');
-      cg.addColorStop(0.5, '#FFC107');
-      cg.addColorStop(1, '#FFB300');
-      c.fillStyle = cg;
-      c.beginPath();
-      c.moveTo(x - 5, y);
-      c.lineTo(x + w + 5, y);
-      c.lineTo(x + w - 1, y + h);
-      c.lineTo(x + 1, y + h);
-      c.closePath();
-      c.fill();
-      c.fillStyle = 'rgba(255,255,220,0.45)';
-      c.beginPath();
-      c.moveTo(x, y + 2);
-      c.lineTo(x + w, y + 2);
-      c.lineTo(x + w - 5, y + h * 0.45);
-      c.lineTo(x + 5, y + h * 0.45);
-      c.closePath();
-      c.fill();
-    } else if (id === 'patty') {
-      sideBand(c, x, y, w, h, d + 1, '#3E2723');
-      const pg = c.createLinearGradient(x, y, x, y + h);
-      pg.addColorStop(0, '#8D6E63');
-      pg.addColorStop(0.4, '#5D4037');
-      pg.addColorStop(1, '#4E342E');
-      c.fillStyle = pg;
-      roundRect(c, x, y, w, h, 10);
-      c.fill();
-      c.fillStyle = '#6D4C41';
-      c.beginPath();
-      c.ellipse(cx, y + 5, w * 0.46, 5, 0, 0, Math.PI * 2);
-      c.fill();
-      c.strokeStyle = 'rgba(30,18,12,0.4)';
-      c.lineWidth = 2.2;
-      c.lineCap = 'round';
-      for (let i = 0; i < 3; i++) {
-        c.beginPath();
-        c.moveTo(x + 12, y + 9 + i * 7);
-        c.lineTo(x + w - 12, y + 11 + i * 7);
-        c.stroke();
-      }
-      topHighlight(c, x, y, w, h, 8);
-    } else if (id === 'onion') {
-      sideBand(c, x, y, w, h, d - 1, '#F48FB1');
-      const og = c.createLinearGradient(x, y, x, y + h);
-      og.addColorStop(0, '#FCE4EC');
-      og.addColorStop(1, '#F8BBD0');
-      c.fillStyle = og;
-      roundRect(c, x, y, w, h, h / 2);
-      c.fill();
-      c.strokeStyle = 'rgba(244,143,177,0.7)';
-      c.lineWidth = 1.4;
-      for (let i = 1; i < 3; i++) {
-        c.beginPath();
-        c.ellipse(cx, y + (h / 3) * i, w * 0.42, 2.5, 0, 0, Math.PI * 2);
-        c.stroke();
-      }
-      topHighlight(c, x, y, w, h, h / 2);
-    } else if (id === 'pickle') {
-      sideBand(c, x, y, w, h, d - 1, '#33691E');
-      const pig = c.createLinearGradient(x, y, x, y + h);
-      pig.addColorStop(0, '#9CCC65');
-      pig.addColorStop(1, '#558B2F');
-      c.fillStyle = pig;
-      roundRect(c, x, y, w, h, 5);
-      c.fill();
-      for (let i = 0; i < 5; i++) {
-        c.fillStyle = 'rgba(255,255,200,0.35)';
-        c.beginPath();
-        c.arc(x + w * (0.14 + i * 0.18), y + h * 0.45, 2.6, 0, Math.PI * 2);
-        c.fill();
-        c.fillStyle = '#7CB342';
-        c.beginPath();
-        c.arc(x + w * (0.14 + i * 0.18), y + h * 0.48, 2.2, 0, Math.PI * 2);
-        c.fill();
-      }
-    } else if (id === 'bacon') {
-      sideBand(c, x, y, w, h, d - 1, '#8E0000');
-      const bg = c.createLinearGradient(x, y, x, y + h);
-      bg.addColorStop(0, '#E57373');
-      bg.addColorStop(1, '#C62828');
-      c.fillStyle = bg;
-      roundRect(c, x, y, w, h, 4);
-      c.fill();
-      for (let i = 0; i < 3; i++) {
-        const yy = y + 3 + i * 5;
-        const fat = c.createLinearGradient(x, yy, x + w, yy);
-        fat.addColorStop(0, '#FFE0B2');
-        fat.addColorStop(0.5, '#FFCC80');
-        fat.addColorStop(1, '#FFE0B2');
-        c.fillStyle = fat;
-        roundRect(c, x + 1, yy, w - 2, 3, 1);
-        c.fill();
-      }
-    } else if (id === 'egg') {
-      sideBand(c, x, y, w, h, d, '#E0D5B8');
-      const eg = c.createRadialGradient(cx, y + h * 0.4, 2, cx, y + h * 0.5, w * 0.5);
-      eg.addColorStop(0, '#FFFAF0');
-      eg.addColorStop(1, '#F0E6C8');
-      c.fillStyle = eg;
-      roundRect(c, x, y, w, h, h / 2);
-      c.fill();
-      const yolkR = Math.min(w * 0.22, 16);
-      const yg = c.createRadialGradient(cx - 3, y + h / 2 - 2, 1, cx, y + h / 2, yolkR);
-      yg.addColorStop(0, '#FFE082');
-      yg.addColorStop(0.6, '#FFC107');
-      yg.addColorStop(1, '#FF8F00');
-      c.fillStyle = yg;
-      c.beginPath();
-      c.ellipse(cx, y + h / 2, yolkR, h * 0.32, 0, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = 'rgba(255,255,255,0.55)';
-      c.beginPath();
-      c.ellipse(cx - yolkR * 0.3, y + h / 2 - h * 0.1, yolkR * 0.28, h * 0.1, -0.4, 0, Math.PI * 2);
-      c.fill();
-    } else if (id === 'avocado') {
-      sideBand(c, x, y, w, h, d, '#558B2F');
-      const ag = c.createLinearGradient(x, y, x, y + h);
-      ag.addColorStop(0, '#AED581');
-      ag.addColorStop(1, '#7CB342');
-      c.fillStyle = ag;
-      roundRect(c, x, y, w, h, h / 2);
-      c.fill();
-      c.fillStyle = '#F9A825';
-      c.beginPath();
-      c.ellipse(cx, y + h / 2, Math.min(w * 0.14, 10), h * 0.28, 0, 0, Math.PI * 2);
-      c.fill();
-      topHighlight(c, x, y, w, h, h / 2);
-    } else if (id === 'mushroom') {
-      sideBand(c, x, y, w, h, d, '#6D4C41');
-      const mg = c.createLinearGradient(x, y, x, y + h);
-      mg.addColorStop(0, '#EFEBE9');
-      mg.addColorStop(1, '#BCAAA4');
-      c.fillStyle = mg;
-      roundRect(c, x, y, w, h, 8);
-      c.fill();
-      c.fillStyle = 'rgba(121,85,72,0.35)';
-      for (let i = 0; i < 4; i++) {
-        c.beginPath();
-        c.arc(x + w * (0.2 + i * 0.2), y + h * 0.45, 3, 0, Math.PI * 2);
-        c.fill();
-      }
-      topHighlight(c, x, y, w, h, 6);
-    } else if (id === 'chili') {
-      sideBand(c, x, y, w, h, d - 1, '#B71C1C');
-      const chg = c.createLinearGradient(x, y, x + w, y + h);
-      chg.addColorStop(0, '#FF7043');
-      chg.addColorStop(1, '#D32F2F');
-      c.fillStyle = chg;
-      roundRect(c, x, y, w, h, 6);
-      c.fill();
-      c.fillStyle = '#2E7D32';
-      roundRect(c, x + w * 0.42, y - 2, w * 0.16, 5, 2);
-      c.fill();
-      topHighlight(c, x, y, w, h, 4);
-    } else if (id === 'pineapple') {
-      sideBand(c, x, y, w, h, d, '#F9A825');
-      const png = c.createLinearGradient(x, y, x, y + h);
-      png.addColorStop(0, '#FFE082');
-      png.addColorStop(1, '#FFB300');
-      c.fillStyle = png;
-      roundRect(c, x, y, w, h, 5);
-      c.fill();
-      c.strokeStyle = 'rgba(255,143,0,0.5)';
-      c.lineWidth = 1;
-      for (let i = 0; i < 3; i++) {
-        c.beginPath();
-        c.moveTo(x + 8, y + 5 + i * 5);
-        c.lineTo(x + w - 8, y + 7 + i * 5);
-        c.stroke();
-      }
-    } else if (id === 'shrimp') {
-      sideBand(c, x, y, w, h, d, '#E64A19');
-      const sg = c.createLinearGradient(x, y, x, y + h);
-      sg.addColorStop(0, '#FFAB91');
-      sg.addColorStop(1, '#FF7043');
-      c.fillStyle = sg;
-      roundRect(c, x, y, w, h, h / 2);
-      c.fill();
-      c.strokeStyle = 'rgba(255,255,255,0.45)';
-      c.lineWidth = 1.5;
-      for (let i = 0; i < 4; i++) {
-        c.beginPath();
-        c.arc(x + w * (0.2 + i * 0.2), y + h * 0.5, 4, Math.PI * 0.2, Math.PI * 0.8);
-        c.stroke();
-      }
-      topHighlight(c, x, y, w, h, h / 2);
-    } else if (id === 'corn') {
-      sideBand(c, x, y, w, h, d - 1, '#F9A825');
-      const cog = c.createLinearGradient(x, y, x, y + h);
-      cog.addColorStop(0, '#FFF59D');
-      cog.addColorStop(1, '#FFD54F');
-      c.fillStyle = cog;
-      roundRect(c, x, y, w, h, 4);
-      c.fill();
-      c.fillStyle = '#FFC107';
-      for (let row = 0; row < 2; row++) {
-        for (let i = 0; i < 6; i++) {
-          c.beginPath();
-          c.arc(x + w * (0.12 + i * 0.15), y + h * (0.35 + row * 0.35), 2.4, 0, Math.PI * 2);
-          c.fill();
-        }
-      }
-    } else if (id === 'sauce') {
-      c.fillStyle = '#BF360C';
-      c.beginPath();
-      c.moveTo(x + 4, y + 2);
-      c.quadraticCurveTo(x + w * 0.25, y + h + d, x + w * 0.4, y + h * 0.6);
-      c.quadraticCurveTo(x + w * 0.55, y + h + d + 2, x + w * 0.7, y + h * 0.5);
-      c.quadraticCurveTo(x + w * 0.85, y + h + d, x + w - 4, y + 2);
-      c.closePath();
-      c.fill();
-      const sag = c.createLinearGradient(x, y, x, y + h);
-      sag.addColorStop(0, '#FF8A65');
-      sag.addColorStop(1, '#E64A19');
-      c.fillStyle = sag;
-      roundRect(c, x, y, w, h * 0.7, 4);
       c.fill();
     } else {
-      sideBand(c, x, y, w, h, d, '#6D4C41');
-      c.fillStyle = '#A1887F';
-      roundRect(c, x, y, w, h, 6);
+      const r = id === 'tomato' || id === 'onion' || id === 'egg' ? h / 2 : 8;
+      roundRect(c, x, y, w, h, r);
       c.fill();
-      topHighlight(c, x, y, w, h, 6);
     }
-
     c.restore();
-  }
-
-  function drawTable() {
-    ctx.fillStyle = '#FFE8D0';
-    ctx.fillRect(0, tableY, W, H - tableY);
-    ctx.fillStyle = '#FFD9B8';
-    ctx.fillRect(0, tableY, W, 4);
-    const pg = ctx.createRadialGradient(W / 2, tableY + 18, 4, W / 2, tableY + 18, Math.min(W * 0.42, 180));
-    pg.addColorStop(0, '#FFFFFF');
-    pg.addColorStop(0.7, '#FFF8F0');
-    pg.addColorStop(1, '#F0D8C0');
-    ctx.fillStyle = pg;
-    ctx.beginPath();
-    ctx.ellipse(W / 2, tableY + 18, Math.min(W * 0.42, 180), 14, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(240,200,160,0.8)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.ellipse(W / 2, tableY + 16, Math.min(W * 0.36, 150), 10, 0, Math.PI * 1.1, Math.PI * 1.9);
-    ctx.stroke();
-  }
-
-  function drawBg() {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#FFE8D6');
-    g.addColorStop(0.5, '#FFF5EB');
-    g.addColorStop(1, '#FFEFD9');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(255,200,160,0.22)';
-    for (let i = 0; i < 12; i++) {
-      const px = (i * 97 + 40) % W;
-      const py = (i * 73 + 30) % (H * 0.7);
-      ctx.beginPath();
-      ctx.arc(px, py, 3 + (i % 3), 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  function wrapText(rctx, text, x, y, maxW, lineH) {
-    const chars = String(text).split('');
-    let line = '';
-    let yy = y;
-    for (let i = 0; i < chars.length; i++) {
-      const test = line + chars[i];
-      if (rctx.measureText(test).width > maxW && line) {
-        rctx.fillText(line, x, yy);
-        line = chars[i];
-        yy += lineH;
-      } else {
-        line = test;
-      }
-    }
-    if (line) rctx.fillText(line, x, yy);
-    return yy;
-  }
-
-  function drawResultCard(survived, avgAcc, grade, reason) {
-    const rc = resultCanvas;
-    const rctx = rc.getContext('2d');
-    const RW = 360, RH = 720;
-    rc.width = RW; rc.height = RH;
-
-    const bg = rctx.createLinearGradient(0, 0, 0, RH);
-    bg.addColorStop(0, '#FF6B9D');
-    bg.addColorStop(0.18, '#FF8FB5');
-    bg.addColorStop(0.18, '#FFF5EB');
-    bg.addColorStop(1, '#FFE8D6');
-    rctx.fillStyle = bg;
-    rctx.fillRect(0, 0, RW, RH);
-
-    rctx.fillStyle = '#fff';
-    rctx.font = 'bold 24px "PingFang TC", "Noto Sans TC", sans-serif';
-    rctx.textAlign = 'center';
-    rctx.fillText('漢堡疊疊樂 🍔', RW / 2, 42);
-    rctx.font = '12px "PingFang TC", "Noto Sans TC", sans-serif';
-    rctx.fillText('每局材料隨機 · 靠眼力對齊', RW / 2, 64);
-
-    rctx.fillStyle = '#FFF9F2';
-    roundRect(rctx, 20, 82, RW - 40, 600, 20);
-    rctx.fill();
-    rctx.strokeStyle = '#FFE0C2';
-    rctx.lineWidth = 2;
-    rctx.stroke();
-
-    // Emoji stamp (unique per run)
-    rctx.save();
-    rctx.translate(RW - 58, 118);
-    rctx.rotate(0.35);
-    rctx.globalAlpha = 0.92;
-    rctx.font = '36px serif';
-    rctx.fillText(stampEmoji, 0, 0);
-    rctx.restore();
-
-    // Tier badge
-    rctx.fillStyle = grade.color;
-    rctx.font = 'bold 11px "PingFang TC", sans-serif';
-    rctx.fillText('稀有度 ' + (grade.tier || '?'), RW / 2, 112);
-
-    rctx.fillStyle = grade.color;
-    rctx.font = 'bold 22px "PingFang TC", "Noto Sans TC", sans-serif';
-    rctx.fillText(grade.emoji + ' ' + grade.title, RW / 2, 142);
-
-    // Combo name
-    rctx.fillStyle = '#E85A8A';
-    rctx.font = 'bold 15px "PingFang TC", sans-serif';
-    const cn = '「' + comboName + '」';
-    if (rctx.measureText(cn).width > RW - 60) {
-      rctx.font = 'bold 13px "PingFang TC", sans-serif';
-    }
-    rctx.fillText(cn, RW / 2, 168);
-
-    rctx.fillStyle = '#C45C26';
-    rctx.font = 'bold 58px "PingFang TC", system-ui, sans-serif';
-    rctx.fillText(String(score), RW / 2, 235);
-    rctx.font = '15px "PingFang TC", sans-serif';
-    rctx.fillStyle = '#8B6B4A';
-    rctx.fillText('總分', RW / 2, 258);
-
-    drawMiniStack(rctx, RW / 2, 318);
-
-    let resultText = '完成漢堡 ✅';
-    if (reason === 'timeout') resultText = '時間到 ⏰';
-    else if (!survived) resultText = '散枱出局 💥';
-
-    const ended = new Date();
-    const lines = [
-      { label: '層數', value: placed + ' / ' + TOTAL_LAYERS },
-      { label: '平均對齊%', value: avgAcc + '%' },
-      { label: '完美次數', value: String(perfects) },
-      { label: '結果', value: resultText },
-      { label: 'Run ID', value: runId },
-      { label: 'Seed', value: runSeed.toString(16).toUpperCase() },
-    ];
-    rctx.font = '13px "PingFang TC", sans-serif';
-    rctx.textAlign = 'left';
-    let ly = 395;
-    lines.forEach((ln) => {
-      rctx.fillStyle = '#A07858';
-      rctx.fillText(ln.label, 48, ly);
-      rctx.fillStyle = '#3D2914';
-      rctx.textAlign = 'right';
-      rctx.font = 'bold 13px "PingFang TC", sans-serif';
-      rctx.fillText(ln.value, RW - 48, ly);
-      rctx.textAlign = 'left';
-      rctx.font = '13px "PingFang TC", sans-serif';
-      ly += 26;
-    });
-
-    // 廚神簽
-    rctx.textAlign = 'center';
-    rctx.fillStyle = '#C45C26';
-    rctx.font = 'bold 13px "PingFang TC", sans-serif';
-    rctx.fillText('—— 廚神簽 ——', RW / 2, ly + 8);
-    rctx.fillStyle = '#5A3A22';
-    rctx.font = '12px "PingFang TC", sans-serif';
-    wrapText(rctx, fortuneLine, RW / 2, ly + 28, RW - 70, 18);
-
-    rctx.fillStyle = '#A07858';
-    rctx.font = '11px "PingFang TC", sans-serif';
-    rctx.fillText(formatHkTime(ended), RW / 2, 660);
-    rctx.fillText('分享去 Threads，睇邊個疊得齊！', RW / 2, 680);
   }
 
   function drawMiniStack(rctx, cx, cy) {
@@ -1389,8 +1199,80 @@
       const mh = p.h * scale;
       const mx = cx - mw / 2 + (p.x + p.w / 2 - avgCx) * scale * 0.3;
       y -= mh;
-      drawIngredientOn(rctx, { x: mx, y, w: mw, h: mh, id: p.id }, 1);
+      drawIngredientOn(rctx, { x: mx, y, w: mw, h: mh, id: p.id });
     }
+  }
+
+  function drawResultCard(survived, avgAcc, grade, reason) {
+    const rc = resultCanvas;
+    const rctx = rc.getContext('2d');
+    const RW = 360, RH = 640;
+    rc.width = RW; rc.height = RH;
+
+    const bg = rctx.createLinearGradient(0, 0, 0, RH);
+    bg.addColorStop(0, '#FF6B9D');
+    bg.addColorStop(0.16, '#FF8FB5');
+    bg.addColorStop(0.16, '#FFF5EB');
+    bg.addColorStop(1, '#FFE8D6');
+    rctx.fillStyle = bg;
+    rctx.fillRect(0, 0, RW, RH);
+
+    rctx.fillStyle = '#fff';
+    rctx.font = 'bold 24px "PingFang TC", "Noto Sans TC", sans-serif';
+    rctx.textAlign = 'center';
+    rctx.fillText('漢堡疊疊樂 🍔', RW / 2, 40);
+
+    rctx.fillStyle = '#FFF9F2';
+    roundRect(rctx, 20, 58, RW - 40, 540, 20);
+    rctx.fill();
+    rctx.strokeStyle = '#FFE0C2';
+    rctx.lineWidth = 2;
+    rctx.stroke();
+
+    rctx.fillStyle = grade.color;
+    rctx.font = 'bold 22px "PingFang TC", "Noto Sans TC", sans-serif';
+    rctx.fillText(grade.emoji + ' ' + grade.title, RW / 2, 100);
+
+    rctx.fillStyle = '#C45C26';
+    rctx.font = 'bold 58px "PingFang TC", system-ui, sans-serif';
+    rctx.fillText(String(score), RW / 2, 175);
+    rctx.font = '15px "PingFang TC", sans-serif';
+    rctx.fillStyle = '#8B6B4A';
+    rctx.fillText('總分', RW / 2, 198);
+
+    drawMiniStack(rctx, RW / 2, 270);
+
+    let resultText = '完成';
+    if (reason === 'timeout') resultText = '時間到';
+    else if (!survived) resultText = '散枱出局';
+
+    const ended = new Date();
+    const lines = [
+      { label: '層數', value: placed + ' / ' + TOTAL_LAYERS },
+      { label: '平均對齊', value: avgAcc + '%' },
+      { label: '完美次數', value: String(perfects) },
+      { label: '結果', value: resultText },
+      { label: 'Run ID', value: runId },
+    ];
+    rctx.font = '13px "PingFang TC", sans-serif';
+    rctx.textAlign = 'left';
+    let ly = 360;
+    lines.forEach((ln) => {
+      rctx.fillStyle = '#A07858';
+      rctx.fillText(ln.label, 48, ly);
+      rctx.fillStyle = '#3D2914';
+      rctx.textAlign = 'right';
+      rctx.font = 'bold 13px "PingFang TC", sans-serif';
+      rctx.fillText(ln.value, RW - 48, ly);
+      rctx.textAlign = 'left';
+      rctx.font = '13px "PingFang TC", sans-serif';
+      ly += 28;
+    });
+
+    rctx.textAlign = 'center';
+    rctx.fillStyle = '#A07858';
+    rctx.font = '11px "PingFang TC", sans-serif';
+    rctx.fillText(formatHkTime(ended), RW / 2, 560);
   }
 
   function tick(ts) {
@@ -1404,8 +1286,11 @@
         timeLeft = 0;
         updateTimeBar();
         if (state !== 'over' && state !== 'result') {
-          showFloat('時間到！⏰', '#E85A8A');
+          showFloat('時間到！', '#E85A8A');
           shake = 10;
+          if (falling && falling.mesh) {
+            pieceRoot.remove(falling.mesh);
+          }
           falling = null;
           state = 'over';
           endReason = 'timeout';
@@ -1420,7 +1305,7 @@
       let dx = 0;
       if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx -= 6.5;
       if (keys['ArrowRight'] || keys['d'] || keys['D']) dx += 6.5;
-      if (dx) {
+      if (dx && stack.length) {
         const base = stack[0];
         moveBase(base.x + base.w / 2 + dx);
       }
@@ -1428,45 +1313,38 @@
 
     if (state === 'falling' && falling) {
       falling.y += falling.vy;
+      syncMesh(falling);
       const top = stack[stack.length - 1];
       if (falling.y + falling.h >= top.y) {
         falling.y = top.y - falling.h;
+        syncMesh(falling);
         landPiece();
       }
     }
 
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
-      if (p.life <= 0) particles.splice(i, 1);
+      p.mesh.position.x += p.vx;
+      p.mesh.position.y += p.vy;
+      p.mesh.position.z += p.vz;
+      p.vy -= 0.18;
+      p.life--;
+      if (p.life <= 0) {
+        particleRoot.remove(p.mesh);
+        particles.splice(i, 1);
+      }
     }
+
     if (shake > 0) shake *= 0.85;
     if (shake < 0.3) shake = 0;
 
-    draw();
-    animId = requestAnimationFrame(tick);
-  }
+    const shakeX = shake ? (Math.random() - 0.5) * shake * 0.4 : 0;
+    const shakeY = shake ? (Math.random() - 0.5) * shake * 0.25 : 0;
+    pieceRoot.position.x = shakeX;
+    pieceRoot.position.y = shakeY;
 
-  function draw() {
-    ctx.save();
-    if (shake) {
-      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-    }
-    drawBg();
-    drawTable();
-    for (const p of stack) drawIngredient(p);
-    if (falling) {
-      drawIngredient(falling, 0.95);
-    }
-    for (const p of particles) {
-      ctx.globalAlpha = Math.min(1, p.life / 20);
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-    ctx.restore();
+    renderer.render(scene, camera);
+    animId = requestAnimationFrame(tick);
   }
 
   document.getElementById('startBtn').addEventListener('click', () => {
@@ -1495,7 +1373,7 @@
 
   resize();
   updateTimeBar();
-  draw();
+  renderer.render(scene, camera);
   animId = requestAnimationFrame(tick);
 })();
 </script>

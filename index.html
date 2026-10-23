@@ -3,21 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FFF5EB">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>漢堡疊疊樂 🍔</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body {
     height: 100%;
+    height: 100dvh;
     overflow: hidden;
     font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
     background: #FFF5EB;
     color: #3D2914;
+    overscroll-behavior: none;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
   #wrap {
     position: relative;
     width: 100%;
     height: 100%;
-    max-width: 420px;
+    height: 100dvh;
+    max-width: 480px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
@@ -43,7 +51,7 @@
     text-shadow: 0 2px 0 rgba(0,0,0,0.1);
   }
   #banner .hook {
-    font-size: 0.78rem;
+    font-size: 0.85rem;
     opacity: 0.95;
     margin-top: 3px;
     font-weight: 500;
@@ -55,7 +63,7 @@
     align-items: stretch;
     gap: 6px;
     padding: 8px 10px 6px;
-    font-size: 0.8rem;
+    font-size: 0.88rem;
     font-weight: 600;
     background: rgba(255,255,255,0.92);
     backdrop-filter: blur(8px);
@@ -88,7 +96,7 @@
     letter-spacing: 0.02em;
   }
   #hud .acc { color: #E85A8A; }
-  #hud .meta { color: #5A3A22; font-size: 0.75rem; }
+  #hud .meta { color: #5A3A22; font-size: 0.82rem; }
   #timeBarWrap {
     flex: 0 0 auto;
     padding: 0 12px 8px;
@@ -132,7 +140,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.65rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #5A3A22;
     text-shadow: 0 1px 0 rgba(255,255,255,0.6);
@@ -190,8 +198,9 @@
     display: inline-block;
     border: none;
     border-radius: 999px;
-    padding: 12px 26px;
-    font-size: 1rem;
+    padding: 14px 28px;
+    min-height: 48px;
+    font-size: 1.05rem;
     font-weight: 700;
     font-family: inherit;
     cursor: pointer;
@@ -221,7 +230,7 @@
   }
   .result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .hint {
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     color: rgba(255,255,255,0.95);
     text-align: center;
     margin-top: 2px;
@@ -248,12 +257,13 @@
   }
   #controlsHint {
     position: absolute;
-    bottom: 10px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0));
     left: 0; right: 0;
     text-align: center;
-    font-size: 0.7rem;
+    font-size: 0.82rem;
+    font-weight: 600;
     color: #A07858;
-    opacity: 0.85;
+    opacity: 0.9;
     pointer-events: none;
     z-index: 3;
   }
